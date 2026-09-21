@@ -6,8 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "deadme",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.deadme.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,10 +21,17 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-router",
+        {
+          "root": "src/app"
+        }
+      ]
     ]
   }
 }
