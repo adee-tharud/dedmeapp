@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  StyleProp,
 } from 'react-native';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
 
@@ -15,8 +16,8 @@ interface ButtonProps {
   variant?: 'primary' | 'outline' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export function Button({

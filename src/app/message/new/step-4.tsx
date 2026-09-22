@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   View,
   Text,
@@ -106,7 +105,7 @@ export default function Step4Screen() {
           accessibilityState={{ checked: confirmed }}
           accessibilityLabel="I understand this message cannot be recalled once sent"
         >
-          <View style={[styles.checkbox, confirmed && styles.checkboxChecked]}>
+          <View style={[styles.checkbox, confirmed && styles.checkboxChecked,]}>
             {confirmed && <Ionicons name="checkmark" size={14} color={colors.white} />}
           </View>
           <Text style={styles.checkboxText}>
@@ -122,7 +121,7 @@ export default function Step4Screen() {
           label="Save and activate"
           onPress={handleActivate}
           disabled={!confirmed}
-          style={[styles.activateBtn, !confirmed && styles.activateBtnDisabled]}
+          style={[styles.activateBtn, !confirmed && styles.activateBtnDisabled,]}
         />
       </ScrollView>
     </SafeAreaView>

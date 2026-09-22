@@ -5,7 +5,7 @@ import { colors } from '../theme/tokens';
 export default function RootLayout() {
   return (
     <>
-      <StatusBar style="dark" backgroundColor={colors.sky.bg} />
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
