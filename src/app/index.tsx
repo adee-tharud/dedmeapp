@@ -216,6 +216,15 @@ export default function WelcomeScreen() {
           <Text style={styles.btnText}>Get started</Text>
           <Text style={styles.btnArrow}>›</Text>
         </TouchableOpacity>
+
+        {/* ── Sign in link ──────────────────────────────────────────────────── */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/sign-in')}
+          style={styles.signInLink}
+          accessibilityLabel="Sign in to existing account"
+        >
+          <Text style={styles.signInText}>Already have an account? <Text style={styles.signInTextBold}>Sign in</Text></Text>
+        </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
   );
@@ -330,19 +339,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[0],
   },
   btn: {
-    backgroundColor: colors.brand[700],
-    borderRadius: radii.full,
-    paddingVertical: spacing[5],
-    paddingHorizontal: spacing[8],
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
+    backgroundColor: colors.brand[700],
+    borderRadius: radii.full,
+    paddingVertical: spacing[5],
+    paddingHorizontal: spacing[8],
     shadowColor: colors.brand[800],
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
   },
   btnText: {
     fontSize: fontSizes.lg,
@@ -352,8 +361,21 @@ const styles = StyleSheet.create({
   },
   btnArrow: {
     fontSize: fontSizes['2xl'],
-    fontWeight: fontWeights.bold,
     color: colors.white,
-    marginTop: -2,
+    lineHeight: fontSizes['2xl'] * 1.1,
+  },
+
+  // Sign in link
+  signInLink: {
+    marginTop: spacing[4],
+    alignItems: 'center',
+  },
+  signInText: {
+    fontSize: fontSizes.sm,
+    color: colors.grey[500],
+  },
+  signInTextBold: {
+    fontWeight: fontWeights.bold,
+    color: colors.brand[600],
   },
 });

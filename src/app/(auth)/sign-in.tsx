@@ -11,23 +11,29 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
 
-export default function SignUpScreen() {
-  const [email, setEmail] = useState('');
+export default function SignInScreen() {
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
 
-  const handleCreate = async () => {
+  const handleSignIn = async () => {
     if (!email || !password) return;
+    setError('');
     setLoading(true);
     // TODO: wire up Supabase auth
     await new Promise(r => setTimeout(r, 800));
     setLoading(false);
-    router.push('/(onboarding)/caregiver');
+    // On success navigate to main app — replace so user can't go back to sign-in
+    router.replace('/(tabs)');
+  };
+
+  const handleForgotPassword = () => {
+    // TODO: navigate to forgot-password screen or show a modal
   };
 
   return (
@@ -36,7 +42,7 @@ export default function SignUpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.kav}
       >
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
@@ -45,13 +51,8 @@ export default function SignUpScreen() {
           >
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create your account</Text>
+          <Text style={styles.headerTitle}>Sign in</Text>
           <View style={{ width: 40 }} />
-        </View>
-
-        {/* ── Step indicator ──────────────────────────────────────────────── */}
-        <View style={styles.stepRow}>
-          <StepIndicator total={3} current={0} />
         </View>
 
         <ScrollView
@@ -60,18 +61,18 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Mascot ────────────────────────────────────────────────────── */}
+          {/* ── Mascot ──────────────────────────────────────────────────────── */}
           <Image
             source={require('../../../assets/logo1.png')}
             style={styles.mascot}
             resizeMode="contain"
           />
 
-          {/* ── Title ─────────────────────────────────────────────────────── */}
-          <Text style={styles.title}>Let's get you settled</Text>
-          <Text style={styles.subtitle}>Your details stay private and protected.</Text>
+          {/* ── Title ───────────────────────────────────────────────────────── */}
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to continue protecting your loved ones.</Text>
 
-          {/* ── Form ──────────────────────────────────────────────────────── */}
+          {/* ── Form ────────────────────────────────────────────────────────── */}
           <View style={styles.form}>
             <Input
               label="Email"
@@ -83,30 +84,47 @@ export default function SignUpScreen() {
             />
             <Input
               label="Password"
-              placeholder="At least 8 characters"
+              placeholder="Your password"
               secureTextEntry
               value={password}
               onChangeText={setPassword}
-              textContentType="newPassword"
+              textContentType="password"
+              labelRight="Forgot password?"
             />
           </View>
 
-          {/* ── Create account button ─────────────────────────────────────── */}
+          {/* Forgot password tap target (positioned under the field) */}
+          <TouchableOpacity
+            onPress={handleForgotPassword}
+            style={styles.forgotRow}
+            accessibilityLabel="Forgot password"
+          >
+            <Text style={styles.forgotText}>Forgot your password?</Text>
+          </TouchableOpacity>
+
+          {/* ── Error message ───────────────────────────────────────────────── */}
+          {error !== '' && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          )}
+
+          {/* ── Sign in button ──────────────────────────────────────────────── */}
           <Button
-            label="Create account"
-            onPress={handleCreate}
+            label="Sign in"
+            onPress={handleSignIn}
             loading={loading}
-            disabled={!email || password.length < 8}
+            disabled={!email || password.length < 1}
           />
 
-          {/* ── Divider ───────────────────────────────────────────────────── */}
+          {/* ── Divider ─────────────────────────────────────────────────────── */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* ── Social buttons ────────────────────────────────────────────── */}
+          {/* ── Social buttons ──────────────────────────────────────────────── */}
           <View style={styles.socialRow}>
             <TouchableOpacity
               style={styles.socialBtn}
@@ -127,22 +145,14 @@ export default function SignUpScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ── Terms ─────────────────────────────────────────────────────── */}
-          <Text style={styles.terms}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms</Text>
-            {' '}and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>.
-          </Text>
-
-          {/* ── Already have an account ───────────────────────────────────── */}
-          <View style={styles.signInRow}>
-            <Text style={styles.signInPrompt}>Already have an account?</Text>
+          {/* ── No account yet? ─────────────────────────────────────────────── */}
+          <View style={styles.signUpRow}>
+            <Text style={styles.signUpPrompt}>Don't have an account?</Text>
             <TouchableOpacity
-              onPress={() => router.push('/(auth)/sign-in')}
-              accessibilityLabel="Sign in"
+              onPress={() => router.replace('/(auth)/')}
+              accessibilityLabel="Create account"
             >
-              <Text style={styles.signInLink}> Sign in</Text>
+              <Text style={styles.signUpLink}> Create one</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -193,12 +203,6 @@ const styles = StyleSheet.create({
     color: colors.brand[900],
   },
 
-  // Step
-  stepRow: {
-    alignItems: 'center',
-    paddingBottom: spacing[4],
-  },
-
   // Scroll
   scroll: { flex: 1 },
   scrollContent: {
@@ -231,6 +235,32 @@ const styles = StyleSheet.create({
   // Form
   form: {
     gap: spacing[4],
+  },
+
+  // Forgot password
+  forgotRow: {
+    alignSelf: 'flex-end',
+    marginTop: -spacing[3],
+  },
+  forgotText: {
+    fontSize: fontSizes.sm,
+    fontWeight: fontWeights.medium,
+    color: colors.brand[600],
+  },
+
+  // Error banner
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  errorBannerText: {
+    fontSize: fontSizes.sm,
+    color: colors.danger,
+    fontWeight: fontWeights.medium,
   },
 
   // Divider
@@ -282,29 +312,17 @@ const styles = StyleSheet.create({
     color: colors.brand[900],
   },
 
-  // Terms
-  terms: {
-    fontSize: fontSizes.xs,
-    color: colors.grey[400],
-    textAlign: 'center',
-    lineHeight: fontSizes.xs * 1.6,
-  },
-  termsLink: {
-    color: colors.brand[600],
-    fontWeight: fontWeights.medium,
-  },
-
-  // Sign in link
-  signInRow: {
+  // Sign up link
+  signUpRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  signInPrompt: {
+  signUpPrompt: {
     fontSize: fontSizes.sm,
     color: colors.grey[500],
   },
-  signInLink: {
+  signUpLink: {
     fontSize: fontSizes.sm,
     fontWeight: fontWeights.bold,
     color: colors.brand[600],
