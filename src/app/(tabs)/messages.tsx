@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
@@ -54,6 +55,7 @@ export default function MessagesScreen() {
         <Text style={styles.title}>Secret messages</Text>
         <TouchableOpacity
           style={styles.fab}
+          onPress={() => router.push('/message/new/step-1')}
           activeOpacity={0.85}
           accessibilityLabel="Add new message"
           accessibilityRole="button"
