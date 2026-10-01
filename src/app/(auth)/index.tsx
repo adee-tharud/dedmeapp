@@ -1,3 +1,10 @@
+/**
+ * Sign-up screen — step 1 of account creation.
+ *
+ * Security Guide §4: surface real Supabase errors (weak password, email
+ * already registered) instead of always navigating forward on submit.
+ * Security Guide §7: validate email properly with Zod, not .length > 0.
+ */
 import React, { useState } from 'react';
 import {
   View,
@@ -15,19 +22,54 @@ import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { signUpSchema } from '@/features/auth/schema';
+import { signUp } from '@/features/auth/api';
 
 export default function SignUpScreen() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  /** Derive the disabled state from Zod so the button rule matches the submit rule. */
+  const parseResult = signUpSchema.safeParse({ email, password });
+  const isFormValid = parseResult.success;
 
   const handleCreate = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    // TODO: wire up Supabase auth
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    router.push('/(onboarding)/caregiver');
+    setError('');
+
+    // Client-side Zod validation (UX convenience — server also validates)
+    const result = signUpSchema.safeParse({ email, password });
+    if (!result.success) {
+      setError(result.error.issues[0].message);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = await signUp(result.data);
+
+      // Always proceed to onboarding immediately — the caregiver and plan
+      // steps don't require an active session to collect data.
+      // If email confirmation is required, Supabase returns a user but no
+      // session; the user will be fully authenticated once they click the
+      // link in their inbox. We proceed rather than blocking onboarding.
+      if (data.user) {
+        router.push('/(onboarding)/caregiver');
+      } else {
+        // Unexpected: no user and no error — surface clearly.
+        setError('Account could not be created. Please try again.');
+      }
+    } catch (err: unknown) {
+      // Surface the real Supabase error message (§4: never fake success on failure)
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -68,7 +110,7 @@ export default function SignUpScreen() {
           />
 
           {/* ── Title ─────────────────────────────────────────────────────── */}
-          <Text style={styles.title}>Let's get you settled</Text>
+          <Text style={styles.title}>Let&apos;s get you settled</Text>
           <Text style={styles.subtitle}>Your details stay private and protected.</Text>
 
           {/* ── Form ──────────────────────────────────────────────────────── */}
@@ -77,8 +119,10 @@ export default function SignUpScreen() {
               label="Email"
               placeholder="you@example.com"
               keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => { setEmail(v); setError(''); }}
               textContentType="emailAddress"
             />
             <Input
@@ -86,17 +130,24 @@ export default function SignUpScreen() {
               placeholder="At least 8 characters"
               secureTextEntry
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(v) => { setPassword(v); setError(''); }}
               textContentType="newPassword"
             />
           </View>
+
+          {/* ── Error banner ──────────────────────────────────────────────── */}
+          {error !== '' && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          )}
 
           {/* ── Create account button ─────────────────────────────────────── */}
           <Button
             label="Create account"
             onPress={handleCreate}
-            loading={loading}
-            disabled={!email || password.length < 8}
+            loading={isLoading}
+            disabled={!isFormValid || isLoading}
           />
 
           {/* ── Divider ───────────────────────────────────────────────────── */}
@@ -106,24 +157,26 @@ export default function SignUpScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* ── Social buttons ────────────────────────────────────────────── */}
+          {/* ── Social buttons — disabled until wired (Guide §4) ──────────── */}
           <View style={styles.socialRow}>
             <TouchableOpacity
-              style={styles.socialBtn}
-              activeOpacity={0.85}
-              accessibilityLabel="Continue with Apple"
+              style={[styles.socialBtn, styles.socialBtnDisabled]}
+              activeOpacity={0.6}
+              accessibilityLabel="Continue with Apple — coming soon"
+              disabled
             >
               <Text style={styles.socialIcon}>⏺</Text>
-              <Text style={styles.socialLabel}>Apple</Text>
+              <Text style={[styles.socialLabel, styles.socialLabelDisabled]}>Apple</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.socialBtn}
-              activeOpacity={0.85}
-              accessibilityLabel="Continue with Google"
+              style={[styles.socialBtn, styles.socialBtnDisabled]}
+              activeOpacity={0.6}
+              accessibilityLabel="Continue with Google — coming soon"
+              disabled
             >
-              <Text style={[styles.socialIcon, { color: '#4285F4' }]}>G</Text>
-              <Text style={styles.socialLabel}>Google</Text>
+              <Text style={[styles.socialIcon, { color: '#4285F4', opacity: 0.5 }]}>G</Text>
+              <Text style={[styles.socialLabel, styles.socialLabelDisabled]}>Google</Text>
             </TouchableOpacity>
           </View>
 
@@ -233,6 +286,21 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
 
+  // Error banner
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  errorBannerText: {
+    fontSize: fontSizes.sm,
+    color: colors.danger,
+    fontWeight: fontWeights.medium,
+  },
+
   // Divider
   dividerRow: {
     flexDirection: 'row',
@@ -271,6 +339,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  socialBtnDisabled: {
+    opacity: 0.5,
+  },
   socialIcon: {
     fontSize: fontSizes.md,
     fontWeight: fontWeights.bold,
@@ -280,6 +351,9 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.md,
     fontWeight: fontWeights.bold,
     color: colors.brand[900],
+  },
+  socialLabelDisabled: {
+    color: colors.grey[400],
   },
 
   // Terms

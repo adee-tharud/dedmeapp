@@ -31,7 +31,8 @@
         {
           "root": "src/app"
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

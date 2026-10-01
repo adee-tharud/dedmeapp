@@ -12,6 +12,7 @@ import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
 
+
 const PLANS = [
   {
     id: 'free',
@@ -46,17 +47,15 @@ const FEATURES = [
 
 export default function PlanScreen() {
   const [selected, setSelected] = useState<PlanId>('yearly');
-  const [loading, setLoading] = useState(false);
 
   const selectedPlan = PLANS.find(p => p.id === selected)!;
 
   const handleContinue = async () => {
-    setLoading(true);
-    // TODO: wire up RevenueCat / Stripe
-    await new Promise(r => setTimeout(r, 600));
-    setLoading(false);
+    // Subscription payment not yet wired up — proceed directly to the app.
+    // When RevenueCat / Stripe is ready, add purchase logic here before navigating.
     router.replace('/(tabs)');
   };
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -144,7 +143,6 @@ export default function PlanScreen() {
         <Button
           label={`Continue with ${selectedPlan.name}`}
           onPress={handleContinue}
-          loading={loading}
         />
 
         {/* ── Restore purchases ─────────────────────────────────────────────  */}

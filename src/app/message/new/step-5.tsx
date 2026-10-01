@@ -1,9 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   StyleSheet,
   Animated,
   Dimensions,
@@ -17,10 +16,13 @@ import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/t
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.62;
 
+// Store Animated.Values in useState so they're plain variables (not refs),
+// satisfying the react-hooks/refs rule while keeping the same runtime behaviour.
+// useState with a function initialiser guarantees a single Animated.Value instance.
 export default function Step5Screen() {
-  const scale = useRef(new Animated.Value(0.7)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const sparkleRotate = useRef(new Animated.Value(0)).current;
+  const [scale] = useState(() => new Animated.Value(0.7));
+  const [opacity] = useState(() => new Animated.Value(0));
+  const [sparkleRotate] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     // Pop-in animation on mount
@@ -33,12 +35,12 @@ export default function Step5Screen() {
     Animated.loop(
       Animated.timing(sparkleRotate, { toValue: 1, duration: 3000, useNativeDriver: true }),
     ).start();
-  }, []);
+  }, [opacity, scale, sparkleRotate]);
 
-  const sparkleTransform = sparkleRotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const sparkleTransform = useMemo(
+    () => sparkleRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
+    [sparkleRotate],
+  );
 
   return (
     <SafeAreaView style={styles.safe}>

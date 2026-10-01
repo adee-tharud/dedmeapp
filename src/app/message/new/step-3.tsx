@@ -14,11 +14,11 @@ import { Button } from '../../../components/ui/Button';
 import { useDraftStore, SendTiming } from '../../../features/messages/useDraftStore';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/tokens';
 
-const TIMING_OPTIONS: Array<{
+const TIMING_OPTIONS: {
   id: SendTiming;
   title: string;
   description: string;
-}> = [
+}[] = [
   {
     id: 'full_plan',
     title: 'After my full check-in plan',

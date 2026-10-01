@@ -96,7 +96,7 @@ export default function Step1Screen() {
           <View style={styles.infoBanner}>
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand[500]} />
             <Text style={styles.infoBannerText}>
-              We'll verify their identity before sharing anything.
+            We&apos;ll verify their identity before sharing anything.
             </Text>
           </View>
 

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { useAuth } from '../../features/auth/AuthContext';
+import { getProfile } from '../../features/auth/profilesApi';
 
 const { width } = Dimensions.get('window');
 const BTN_SIZE = width * 0.62;
@@ -24,12 +26,27 @@ function greeting() {
 }
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
-  const scale = useRef(new Animated.Value(1)).current;
-  const pulse1 = useRef(new Animated.Value(1)).current;
-  const pulse2 = useRef(new Animated.Value(1)).current;
-  const pulse1Opacity = useRef(new Animated.Value(0.35)).current;
-  const pulse2Opacity = useRef(new Animated.Value(0.2)).current;
+  const [scale]        = useState(() => new Animated.Value(1));
+  const [pulse1]       = useState(() => new Animated.Value(1));
+  const [pulse2]       = useState(() => new Animated.Value(1));
+  const [pulse1Opacity] = useState(() => new Animated.Value(0.35));
+  const [pulse2Opacity] = useState(() => new Animated.Value(0.2));
+
+  // Fetch the user's display name from their profile row
+  useEffect(() => {
+    if (!user) return;
+    getProfile(user.id)
+      .then(profile => {
+        if (profile?.name) {
+          // Show only the first name for a friendly greeting
+          setDisplayName(profile.name.trim().split(' ')[0]);
+        }
+      })
+      .catch(() => { /* silently ignore — name is non-critical */ });
+  }, [user]);
 
   // Idle pulse rings
   useEffect(() => {
@@ -61,7 +78,7 @@ export default function HomeScreen() {
     loop.start();
     loop2.start();
     return () => { loop.stop(); loop2.stop(); };
-  }, []);
+  }, [pulse1, pulse1Opacity, pulse2, pulse2Opacity]);
 
   const handleCheckIn = () => {
     // Tap pop animation
@@ -84,7 +101,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{greeting()}</Text>
-            <Text style={styles.name}>Hey, Alex</Text>
+            <Text style={styles.name}>Hey, {displayName ?? 'there'} 👋</Text>
           </View>
           <TouchableOpacity
             style={styles.avatarBtn}

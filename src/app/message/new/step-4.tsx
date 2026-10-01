@@ -110,7 +110,7 @@ export default function Step4Screen() {
           </View>
           <Text style={styles.checkboxText}>
             I understand that once this message is sent,{' '}
-            <Text style={styles.checkboxBold}>it can't be recalled.</Text>
+            <Text style={styles.checkboxBold}>it can&apos;t be recalled.</Text>
           </Text>
         </TouchableOpacity>
 

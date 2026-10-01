@@ -25,7 +25,7 @@ export default function Step2Screen() {
   useEffect(() => {
     const timer = setTimeout(() => setBody(text), 600);
     return () => clearTimeout(timer);
-  }, [text]);
+  }, [text, setBody]);
 
   const handleContinue = () => {
     setBody(text);

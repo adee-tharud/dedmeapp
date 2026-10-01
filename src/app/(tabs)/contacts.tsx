@@ -48,7 +48,7 @@ export default function ContactsScreen() {
             style={styles.mascot}
             resizeMode="contain"
           />
-          <Text style={styles.heroTitle}>You're not doing this alone</Text>
+          <Text style={styles.heroTitle}>You&apos;re not doing this alone</Text>
           <Text style={styles.heroSubtitle}>
             Your trusted people only hear from us when they need to.
           </Text>
@@ -104,7 +104,7 @@ export default function ContactsScreen() {
           <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand[500]} />
           <Text style={styles.infoNoteText}>
             Contacts only receive an alert when escalation reaches the final stage.
-            They can confirm you're okay to stop delivery.
+            They can confirm you&apos;re okay to stop delivery.
           </Text>
         </View>
       </ScrollView>

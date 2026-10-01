@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,8 @@ function Sparkle({
   style: object;
   delay: number;
 }) {
-  const scale = useRef(new Animated.Value(0.6)).current;
-  const opacity = useRef(new Animated.Value(0.4)).current;
+  const [scale] = useState(() => new Animated.Value(0.6));
+  const [opacity] = useState(() => new Animated.Value(0.4));
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -92,16 +92,15 @@ function Sparkle({
 
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
 export default function WelcomeScreen() {
-  // Entry animation values
-  const mascotY = useRef(new Animated.Value(-30)).current;
-  const mascotOpacity = useRef(new Animated.Value(0)).current;
-  const textY = useRef(new Animated.Value(30)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const btnScale = useRef(new Animated.Value(0.85)).current;
-  const btnOpacity = useRef(new Animated.Value(0)).current;
-
-  // Mascot floating animation
-  const mascotFloat = useRef(new Animated.Value(0)).current;
+  // Entry animation values — useState lazy initialisers ensure a single
+  // Animated.Value instance per mount (satisfies react-hooks/refs rule).
+  const [mascotY]       = useState(() => new Animated.Value(-30));
+  const [mascotOpacity] = useState(() => new Animated.Value(0));
+  const [textY]         = useState(() => new Animated.Value(30));
+  const [textOpacity]   = useState(() => new Animated.Value(0));
+  const [btnScale]      = useState(() => new Animated.Value(0.85));
+  const [btnOpacity]    = useState(() => new Animated.Value(0));
+  const [mascotFloat]   = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     // ── 1. Entry sequence ────────────────────────────────────────────────────
@@ -127,7 +126,8 @@ export default function WelcomeScreen() {
         Animated.timing(mascotFloat, { toValue: 0, duration: 1800, useNativeDriver: true }),
       ]),
     ).start();
-  }, []);
+  }, [btnOpacity, btnScale, mascotFloat, mascotOpacity, mascotY, textOpacity, textY]);
+
 
   const handleGetStarted = () => {
     router.push('/(auth)/');

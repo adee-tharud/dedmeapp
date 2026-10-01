@@ -6,14 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
-
-const { width } = Dimensions.get('window');
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const MESSAGES = [

@@ -1,3 +1,10 @@
+/**
+ * Sign-in screen — existing users re-enter the app here.
+ *
+ * Security Guide §4: surface real Supabase errors ("Invalid login
+ * credentials") instead of always navigating forward on submit.
+ * Security Guide §7: validate email with Zod, not .length > 0.
+ */
 import React, { useState } from 'react';
 import {
   View,
@@ -14,26 +21,45 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { signInSchema } from '@/features/auth/schema';
+import { signIn } from '@/features/auth/api';
 
 export default function SignInScreen() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError]       = useState('');
 
+  const parseResult = signInSchema.safeParse({ email, password });
+  const isFormValid = parseResult.success;
+
   const handleSignIn = async () => {
-    if (!email || !password) return;
     setError('');
-    setLoading(true);
-    // TODO: wire up Supabase auth
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    // On success navigate to main app — replace so user can't go back to sign-in
-    router.replace('/(tabs)');
+
+    const result = signInSchema.safeParse({ email, password });
+    if (!result.success) {
+      setError(result.error.issues[0].message);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await signIn(result.data);
+      // On success replace so the user can't navigate back to sign-in
+      router.replace('/(tabs)');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForgotPassword = () => {
-    // TODO: navigate to forgot-password screen or show a modal
+    // TODO: navigate to forgot-password screen or send a reset email
   };
 
   return (
@@ -78,8 +104,10 @@ export default function SignInScreen() {
               label="Email"
               placeholder="you@example.com"
               keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => { setEmail(v); setError(''); }}
               textContentType="emailAddress"
             />
             <Input
@@ -87,13 +115,13 @@ export default function SignInScreen() {
               placeholder="Your password"
               secureTextEntry
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(v) => { setPassword(v); setError(''); }}
               textContentType="password"
               labelRight="Forgot password?"
             />
           </View>
 
-          {/* Forgot password tap target (positioned under the field) */}
+          {/* Forgot password tap target */}
           <TouchableOpacity
             onPress={handleForgotPassword}
             style={styles.forgotRow}
@@ -102,7 +130,7 @@ export default function SignInScreen() {
             <Text style={styles.forgotText}>Forgot your password?</Text>
           </TouchableOpacity>
 
-          {/* ── Error message ───────────────────────────────────────────────── */}
+          {/* ── Error banner ─────────────────────────────────────────────────── */}
           {error !== '' && (
             <View style={styles.errorBanner}>
               <Text style={styles.errorBannerText}>{error}</Text>
@@ -113,8 +141,8 @@ export default function SignInScreen() {
           <Button
             label="Sign in"
             onPress={handleSignIn}
-            loading={loading}
-            disabled={!email || password.length < 1}
+            loading={isLoading}
+            disabled={!isFormValid || isLoading}
           />
 
           {/* ── Divider ─────────────────────────────────────────────────────── */}
@@ -124,30 +152,32 @@ export default function SignInScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* ── Social buttons ──────────────────────────────────────────────── */}
+          {/* ── Social buttons — disabled until wired (Guide §4) ──────────── */}
           <View style={styles.socialRow}>
             <TouchableOpacity
-              style={styles.socialBtn}
-              activeOpacity={0.85}
-              accessibilityLabel="Continue with Apple"
+              style={[styles.socialBtn, styles.socialBtnDisabled]}
+              activeOpacity={0.6}
+              accessibilityLabel="Continue with Apple — coming soon"
+              disabled
             >
               <Text style={styles.socialIcon}>⏺</Text>
-              <Text style={styles.socialLabel}>Apple</Text>
+              <Text style={[styles.socialLabel, styles.socialLabelDisabled]}>Apple</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.socialBtn}
-              activeOpacity={0.85}
-              accessibilityLabel="Continue with Google"
+              style={[styles.socialBtn, styles.socialBtnDisabled]}
+              activeOpacity={0.6}
+              accessibilityLabel="Continue with Google — coming soon"
+              disabled
             >
-              <Text style={[styles.socialIcon, { color: '#4285F4' }]}>G</Text>
-              <Text style={styles.socialLabel}>Google</Text>
+              <Text style={[styles.socialIcon, { color: '#4285F4', opacity: 0.5 }]}>G</Text>
+              <Text style={[styles.socialLabel, styles.socialLabelDisabled]}>Google</Text>
             </TouchableOpacity>
           </View>
 
           {/* ── No account yet? ─────────────────────────────────────────────── */}
           <View style={styles.signUpRow}>
-            <Text style={styles.signUpPrompt}>Don't have an account?</Text>
+            <Text style={styles.signUpPrompt}>Don&apos;t have an account?</Text>
             <TouchableOpacity
               onPress={() => router.replace('/(auth)/')}
               accessibilityLabel="Create account"
@@ -301,6 +331,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  socialBtnDisabled: {
+    opacity: 0.5,
+  },
   socialIcon: {
     fontSize: fontSizes.md,
     fontWeight: fontWeights.bold,
@@ -310,6 +343,9 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.md,
     fontWeight: fontWeights.bold,
     color: colors.brand[900],
+  },
+  socialLabelDisabled: {
+    color: colors.grey[400],
   },
 
   // Sign up link

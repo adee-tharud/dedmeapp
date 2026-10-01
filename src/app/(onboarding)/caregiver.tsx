@@ -14,26 +14,43 @@ import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { useAuth } from '../../features/auth/AuthContext';
+import { saveCaregiver } from '../../features/contacts/api';
 
 const RELATIONSHIPS = ['Partner', 'Parent', 'Sibling', 'Friend', 'Child', 'Other'];
 
 export default function CaregiverScreen() {
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [relationship, setRelationship] = useState('');
   const [showRelPicker, setShowRelPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const canContinue = name.trim().length > 0 && email.trim().length > 0 && relationship.length > 0;
 
   const handleNext = async () => {
-    if (!canContinue) return;
+    if (!canContinue || !user) return;
+    setError('');
     setLoading(true);
-    // TODO: save caregiver to Supabase
-    await new Promise(r => setTimeout(r, 600));
-    setLoading(false);
-    router.push('/(onboarding)/plan');
+    try {
+      await saveCaregiver({
+        userId:       user.id,
+        name,
+        email,
+        phone:        phone || undefined,
+        relationship: relationship || undefined,
+      });
+      router.push('/(onboarding)/plan');
+    } catch (err: unknown) {
+      // Log the real error so it's visible during development
+      console.error('[CaregiverScreen] saveCaregiver failed:', err);
+      setError(err instanceof Error ? err.message : 'Could not save caregiver. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,7 +91,7 @@ export default function CaregiverScreen() {
           {/* ── Title ─────────────────────────────────────────────────────── */}
           <Text style={styles.title}>Who should we check with?</Text>
           <Text style={styles.subtitle}>
-            Choose someone you trust to make sure you're okay.
+            Choose someone you trust to make sure you&apos;re okay.
           </Text>
 
           {/* ── Form ──────────────────────────────────────────────────────── */}
@@ -142,19 +159,26 @@ export default function CaregiverScreen() {
             </View>
           </View>
 
+          {/* ── Error banner ──────────────────────────────────────────────── */}
+          {error !== '' && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          )}
+
           {/* ── Next button ───────────────────────────────────────────────── */}
           <Button
             label="Next →"
             onPress={handleNext}
             loading={loading}
-            disabled={!canContinue}
+            disabled={!canContinue || loading}
           />
 
           {/* ── Info banner ───────────────────────────────────────────────── */}
           <View style={styles.infoBanner}>
             <Text style={styles.infoBannerIcon}>✉</Text>
             <Text style={styles.infoBannerText}>
-              They'll get an invite from us after you're set up — so they know what to expect.
+              They&apos;ll get an invite from us after you&apos;re set up — so they know what to expect.
             </Text>
           </View>
         </ScrollView>
@@ -237,6 +261,21 @@ const styles = StyleSheet.create({
   },
 
   form: { gap: spacing[4] },
+
+  // Error banner
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  errorBannerText: {
+    fontSize: fontSizes.sm,
+    color: colors.danger,
+    fontWeight: fontWeights.medium,
+  },
 
   // Dropdown
   dropdownContainer: { gap: spacing[2] },
