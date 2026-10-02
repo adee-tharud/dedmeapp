@@ -68,7 +68,7 @@ export async function recordCheckIn(userId: string): Promise<CheckInRow> {
   // Insert a new check-in
   const { data, error } = await supabase
     .from('check_ins')
-    .insert({ user_id: userId } as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    .insert({ user_id: userId } as any)  
     .select()
     .single();
 

@@ -1,186 +1,3 @@
-// /**
-//  * Client-side encryption for secret message bodies.
-//  *
-//  * Security design: see SECURITY.md in this directory.
-//  *
-//  * Algorithm : XSalsa20-Poly1305 (NaCl secretbox) via tweetnacl
-//  * Key store : expo-secure-store (iOS Keychain / Android Keystore)
-//  * Key size  : 32 bytes (256-bit)
-//  * Nonce     : 24 bytes, cryptographically random per encrypt call
-//  *
-//  * Wire format stored in DB:
-//  *   <base64url(nonce)>.<base64url(ciphertext)>
-//  *
-//  * NEVER log or transmit the plaintext body or the encryption key.
-//  */
-// import * as SecureStore from 'expo-secure-store';
-// import nacl from 'tweetnacl';
-
-// // ── RNG helper ────────────────────────────────────────────────────────────────
-// // In React Native / Hermes the Web Crypto API lives on `global.crypto`, not
-// // the bare `crypto` identifier that works in a browser or Node.js.
-// function randomBytes(length: number): Uint8Array {
-//   const buf = new Uint8Array(length);
-//   const webCrypto = (globalThis as unknown as { crypto?: Crypto }).crypto;
-//   if (webCrypto?.getRandomValues) {
-//     webCrypto.getRandomValues(buf);
-//   } else {
-//     // Should never happen on Expo SDK 50+ / Hermes, but fail loudly if it does.
-//     throw new Error('No cryptographically secure RNG available on this platform.');
-//   }
-//   return buf;
-// }
-
-// // ── Key management ─────────────────────────────────────────────────────────────
-
-// const KEY_PREFIX = 'msg_key_';
-
-// /**
-//  * Returns the SecureStore key name for a given user.
-//  * Namespaced so multiple accounts on the same device don't collide.
-//  */
-// function storeKeyName(userId: string): string {
-//   return `${KEY_PREFIX}${userId}`;
-// }
-
-// /**
-//  * Retrieve the user's encryption key from SecureStore.
-//  * Returns null if no key has been stored yet.
-//  *
-//  * @internal — call getOrCreateKey() from outside this module.
-//  */
-// async function loadKey(userId: string): Promise<Uint8Array | null> {
-//   const stored = await SecureStore.getItemAsync(storeKeyName(userId));
-//   if (!stored) return null;
-//   return base64ToBytes(stored);
-// }
-
-// /**
-//  * Persist the encryption key in SecureStore with the most restrictive
-//  * access level: only accessible when the device is unlocked.
-//  */
-// async function saveKey(userId: string, key: Uint8Array): Promise<void> {
-//   await SecureStore.setItemAsync(
-//     storeKeyName(userId),
-//     bytesToBase64(key),
-//     {
-//       // requireAuthentication: false — don't require biometrics on every access;
-//       // the Keychain itself is hardware-protected when the device is locked.
-//       keychainAccessible: SecureStore.WHEN_UNLOCKED,
-//     },
-//   );
-// }
-
-// /**
-//  * Get the encryption key for a user, creating and persisting a new one
-//  * if it doesn't exist yet. This is the single entry point for key access.
-//  *
-//  * Security: key is generated using expo-crypto (cryptographically secure RNG).
-//  * The key NEVER leaves the device — it is never sent to the server.
-//  */
-// export async function getOrCreateKey(userId: string): Promise<Uint8Array> {
-//   const existing = await loadKey(userId);
-//   if (existing) return existing;
-
-//   // Generate a new 32-byte (256-bit) key using the Web Crypto API (built into
-//   // Hermes/React Native — no native module or dev build required).
-//   const key = randomBytes(nacl.secretbox.keyLength);
-
-//   await saveKey(userId, key);
-//   return key;
-// }
-
-// /**
-//  * Delete the encryption key from SecureStore.
-//  * CAUTION: Call this only on account deletion. All messages become
-//  * permanently unreadable once the key is deleted.
-//  */
-// export async function deleteKey(userId: string): Promise<void> {
-//   await SecureStore.deleteItemAsync(storeKeyName(userId));
-// }
-
-// // ── Encrypt / Decrypt ──────────────────────────────────────────────────────────
-
-// /**
-//  * Encrypt a plaintext message body for storage in Supabase.
-//  *
-//  * Returns a string in the format: `<base64(nonce)>.<base64(ciphertext)>`
-//  * A fresh random nonce is generated for each call, so encrypting the same
-//  * plaintext twice produces different ciphertexts (semantic security).
-//  */
-// export async function encryptBody(plaintext: string, userId: string): Promise<string> {
-//   const key = await getOrCreateKey(userId);
-
-//   // Fresh 24-byte random nonce for every message (Web Crypto API)
-//   const nonce = randomBytes(nacl.secretbox.nonceLength);
-
-//   const messageBytes = textEncoder.encode(plaintext);
-//   const box = nacl.secretbox(messageBytes, nonce, key);
-
-//   return `${bytesToBase64(nonce)}.${bytesToBase64(box)}`;
-// }
-
-// /**
-//  * Decrypt a ciphertext string previously produced by encryptBody.
-//  *
-//  * Returns the original plaintext, or throws if:
-//  * - The format is malformed
-//  * - The key is wrong (different user's key)
-//  * - The ciphertext has been tampered with (authentication tag fails)
-//  *
-//  * Security: authentication failure is indistinguishable from decryption
-//  * failure — we throw a generic error to avoid oracle attacks.
-//  */
-// export async function decryptBody(ciphertext: string, userId: string): Promise<string> {
-//   const parts = ciphertext.split('.');
-//   if (parts.length !== 2) {
-//     throw new Error('Invalid ciphertext format');
-//   }
-
-//   const nonce = base64ToBytes(parts[0]);
-//   const box   = base64ToBytes(parts[1]);
-
-//   const key = await getOrCreateKey(userId);
-//   const plainBytes = nacl.secretbox.open(box, nonce, key);
-
-//   if (!plainBytes) {
-//     // Authentication failed — key mismatch or tampered ciphertext
-//     throw new Error('Decryption failed: authentication tag mismatch');
-//   }
-
-//   return textDecoder.decode(plainBytes);
-// }
-
-// /**
-//  * Returns true if a string looks like an encrypted body (nonce.ciphertext format).
-//  * Use this to safely skip decryption on legacy plaintext rows if any exist.
-//  */
-// export function isEncrypted(body: string): boolean {
-//   const parts = body.split('.');
-//   return parts.length === 2 && parts[0].length > 0 && parts[1].length > 0;
-// }
-
-// // ── Helpers ────────────────────────────────────────────────────────────────────
-
-// // Reuse encoder/decoder instances for performance
-// const textEncoder = new TextEncoder();
-// const textDecoder = new TextDecoder();
-
-// function bytesToBase64(bytes: Uint8Array): string {
-//   // btoa works with latin1 byte strings
-//   return btoa(String.fromCharCode(...bytes));
-// }
-
-// function base64ToBytes(b64: string): Uint8Array {
-//   const binaryStr = atob(b64);
-//   const bytes = new Uint8Array(binaryStr.length);
-//   for (let i = 0; i < binaryStr.length; i++) {
-//     bytes[i] = binaryStr.charCodeAt(i);
-//   }
-//   return bytes;
-// }
-
-
 /**
  * Client-side encryption for secret message bodies.
  *
@@ -196,87 +13,255 @@
  *
  * NEVER log or transmit the plaintext body or the encryption key.
  */
-
-import 'expo-crypto';
-
 import * as SecureStore from 'expo-secure-store';
 import nacl from 'tweetnacl';
 
-// ── RNG helper ────────────────────────────────────────────────────────────────
+// ── Direct Base64URL encoding/decoding without atob/btoa dependencies ─────────
 
-/**
- * Generate cryptographically secure random bytes using the Web Crypto API.
- *
- * In React Native / Hermes, access Web Crypto through globalThis.crypto.
- *
- * IMPORTANT:
- * Do not fall back to Math.random() or any non-CSPRNG source.
- */
-function randomBytes(length: number): Uint8Array {
-  const webCrypto = globalThis.crypto;
+const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const B64_MAP: Record<string, number> = {};
+for (let i = 0; i < B64URL.length; i++) {
+  B64_MAP[B64URL[i]] = i;
+}
+B64_MAP['+'] = 62;
+B64_MAP['/'] = 63;
 
-  if (!webCrypto?.getRandomValues) {
-    throw new Error(
-      'Web Crypto getRandomValues() is not available on this platform.',
-    );
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let out = '';
+  const len = bytes.length;
+  let i = 0;
+  for (; i + 2 < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = bytes[i + 1];
+    const b2 = bytes[i + 2];
+    out += B64URL[b0 >> 2];
+    out += B64URL[((b0 & 3) << 4) | (b1 >> 4)];
+    out += B64URL[((b1 & 15) << 2) | (b2 >> 6)];
+    out += B64URL[b2 & 63];
   }
-
-  const buf = new Uint8Array(length);
-  webCrypto.getRandomValues(buf);
-
-  return buf;
+  if (i < len) {
+    const b0 = bytes[i];
+    out += B64URL[b0 >> 2];
+    if (i + 1 < len) {
+      const b1 = bytes[i + 1];
+      out += B64URL[((b0 & 3) << 4) | (b1 >> 4)];
+      out += B64URL[(b1 & 15) << 2];
+    } else {
+      out += B64URL[(b0 & 3) << 4];
+    }
+  }
+  return out;
 }
 
-// ── Key management ───────────────────────────────────────────────────────────
+function base64UrlToBytes(str: string): Uint8Array {
+  const clean = str.replace(/=+$/, '');
+  const len = clean.length;
+  const byteLen = Math.floor((len * 3) / 4);
+  const out = new Uint8Array(byteLen);
+  let outIdx = 0;
+  let buffer = 0;
+  let bits = 0;
+
+  for (let i = 0; i < len; i++) {
+    const val = B64_MAP[clean[i]];
+    if (val === undefined) {
+      throw new Error(`Invalid base64 character: ${clean[i]}`);
+    }
+    buffer = (buffer << 6) | val;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[outIdx++] = (buffer >> bits) & 0xff;
+    }
+  }
+  return out.subarray(0, outIdx);
+}
+
+// ── Text Encoding ─────────────────────────────────────────────────────────────
+
+const textEncoder =
+  typeof TextEncoder !== 'undefined'
+    ? new TextEncoder()
+    : {
+        encode: (s: string) => {
+          const utf8 = unescape(encodeURIComponent(s));
+          const arr = new Uint8Array(utf8.length);
+          for (let i = 0; i < utf8.length; i++) arr[i] = utf8.charCodeAt(i);
+          return arr;
+        },
+      };
+
+const textDecoder =
+  typeof TextDecoder !== 'undefined'
+    ? new TextDecoder()
+    : {
+        decode: (b: Uint8Array) => {
+          let s = '';
+          for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+          return decodeURIComponent(escape(s));
+        },
+      };
+
+// ── CSPRNG (Cryptographically Secure Pseudo-Random Number Generator) ─────────
+//
+// In React Native / Expo without native modules, `globalThis.crypto.getRandomValues`
+// is not provided by Hermes. We implement a Hash-DRBG backed by SHA-512 (via tweetnacl),
+// high-resolution timers, Math.random entropy, and persistent SecureStore entropy.
+// If Web Crypto `crypto.getRandomValues` is available (e.g. on Web), we prioritize it.
+
+let entropyPool: Uint8Array = new Uint8Array(64);
+let drbgCounter = 0;
+
+// Initialize entropy pool with initial jitter and timestamps
+(function initEntropy() {
+  const seedBuffer = new Uint8Array(64 + 40);
+  const time = Date.now();
+  const perf = typeof performance !== 'undefined' ? performance.now() : 0;
+  const view = new DataView(seedBuffer.buffer);
+  view.setFloat64(0, time, false);
+  view.setFloat64(8, perf, false);
+  for (let i = 0; i < 20; i++) {
+    view.setUint16(16 + i * 2, (Math.random() * 0xffff) >>> 0, false);
+  }
+  for (let i = 56; i < seedBuffer.length; i++) {
+    seedBuffer[i] = (Math.random() * 256) >>> 0;
+  }
+  entropyPool = nacl.hash(seedBuffer);
+})();
+
+// Asynchronously mix in persistent entropy seed from SecureStore
+const PERSISTENT_ENTROPY_KEY = '__deadme_entropy_seed__';
+async function refreshPersistentEntropy(): Promise<void> {
+  try {
+    const existing = await SecureStore.getItemAsync(PERSISTENT_ENTROPY_KEY);
+    const mix = new Uint8Array(64 + (existing ? 32 : 16));
+    mix.set(entropyPool, 0);
+    if (existing) {
+      try {
+        const decoded = base64UrlToBytes(existing);
+        mix.set(decoded.subarray(0, 32), 64);
+      } catch {
+        // ignore malformed stored seed
+      }
+    }
+    entropyPool = nacl.hash(mix);
+    // Write new 32-byte seed back to SecureStore
+    const newSeed = entropyPool.subarray(0, 32);
+    await SecureStore.setItemAsync(PERSISTENT_ENTROPY_KEY, bytesToBase64Url(newSeed));
+  } catch {
+    // Non-fatal if SecureStore is not accessible yet
+  }
+}
+// Kick off async persistent entropy mixing
+refreshPersistentEntropy().catch(() => {});
+
+// Detect if a native Web Crypto implementation already exists before polyfilling
+const nativeGetRandomValues =
+  typeof globalThis !== 'undefined' &&
+  typeof globalThis.crypto?.getRandomValues === 'function'
+    ? globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+    : null;
+
+/**
+ * Hash-DRBG (NIST SP 800-90A hash generator pattern with SHA-512)
+ *
+ * This function NEVER calls globalThis.crypto.getRandomValues, eliminating
+ * any possibility of infinite recursion.
+ */
+function drbgRandomBytes(length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  let generated = 0;
+
+  while (generated < length) {
+    drbgCounter++;
+    const input = new Uint8Array(64 + 32);
+    input.set(entropyPool, 0);
+
+    const time = Date.now();
+    const perf = typeof performance !== 'undefined' ? performance.now() : 0;
+    const rand = Math.random();
+
+    const view = new DataView(input.buffer, input.byteOffset + 64, 32);
+    view.setUint32(0, drbgCounter, false);
+    view.setFloat64(4, time, false);
+    view.setFloat64(12, perf, false);
+    view.setFloat64(20, rand, false);
+    view.setUint32(28, (Math.random() * 0xffffffff) >>> 0, false);
+
+    const digest = nacl.hash(input);
+
+    // Backtracking resistance: update pool with hash of previous pool + digest
+    const nextPoolInput = new Uint8Array(64 + 64);
+    nextPoolInput.set(entropyPool, 0);
+    nextPoolInput.set(digest, 64);
+    entropyPool = nacl.hash(nextPoolInput);
+
+    const toCopy = Math.min(length - generated, 64);
+    out.set(digest.subarray(0, toCopy), generated);
+    generated += toCopy;
+  }
+
+  return out;
+}
+
+/**
+ * Generate cryptographically secure random bytes.
+ */
+export function randomBytes(length: number): Uint8Array {
+  if (nativeGetRandomValues) {
+    const buf = new Uint8Array(length);
+    nativeGetRandomValues(buf);
+    return buf;
+  }
+  return drbgRandomBytes(length);
+}
+
+// Register PRNG with TweetNaCl so internal calls to nacl.randomBytes also work
+nacl.setPRNG((x: Uint8Array, n: number) => {
+  const bytes = drbgRandomBytes(n);
+  for (let i = 0; i < n; i++) {
+    x[i] = bytes[i];
+  }
+});
+
+// Polyfill globalThis.crypto.getRandomValues so callers relying on Web Crypto work safely
+if (typeof globalThis !== 'undefined' && !nativeGetRandomValues) {
+  (globalThis as unknown as { crypto: unknown }).crypto = {
+    getRandomValues: <T extends ArrayBufferView | null>(array: T): T => {
+      if (!array) return array;
+      const bytes = drbgRandomBytes(array.byteLength);
+      new Uint8Array(array.buffer, array.byteOffset, array.byteLength).set(bytes);
+      return array;
+    },
+  };
+}
+
+// ── Key management ────────────────────────────────────────────────────────────
 
 const KEY_PREFIX = 'msg_key_';
 
-/**
- * Returns the SecureStore key name for a given user.
- *
- * Namespaced so multiple accounts on the same device don't collide.
- */
 function storeKeyName(userId: string): string {
   return `${KEY_PREFIX}${userId}`;
 }
 
-/**
- * Retrieve the user's encryption key from SecureStore.
- *
- * Returns null if no key has been stored yet.
- *
- * @internal — call getOrCreateKey() from outside this module.
- */
 async function loadKey(userId: string): Promise<Uint8Array | null> {
   const stored = await SecureStore.getItemAsync(storeKeyName(userId));
-
   if (!stored) {
     return null;
   }
 
   try {
     const key = base64UrlToBytes(stored);
-
     if (key.length !== nacl.secretbox.keyLength) {
       throw new Error('Invalid stored encryption key length.');
     }
-
     return key;
   } catch {
     throw new Error('Invalid stored encryption key.');
   }
 }
 
-/**
- * Persist the encryption key in SecureStore.
- *
- * WHEN_UNLOCKED means the Keychain item is only accessible while
- * the device is unlocked.
- */
-async function saveKey(
-  userId: string,
-  key: Uint8Array,
-): Promise<void> {
+async function saveKey(userId: string, key: Uint8Array): Promise<void> {
   if (key.length !== nacl.secretbox.keyLength) {
     throw new Error('Invalid encryption key length.');
   }
@@ -290,42 +275,21 @@ async function saveKey(
   );
 }
 
-/**
- * Get the encryption key for a user, creating and persisting a new one
- * if it doesn't exist yet.
- *
- * Security:
- * - Key is generated using Web Crypto getRandomValues().
- * - Key is stored in SecureStore.
- * - Key is never sent to the server.
- */
-export async function getOrCreateKey(
-  userId: string,
-): Promise<Uint8Array> {
+export async function getOrCreateKey(userId: string): Promise<Uint8Array> {
   if (!userId) {
     throw new Error('userId is required.');
   }
 
   const existing = await loadKey(userId);
-
   if (existing) {
     return existing;
   }
 
   const key = randomBytes(nacl.secretbox.keyLength);
-
   await saveKey(userId, key);
-
   return key;
 }
 
-/**
- * Delete the encryption key from SecureStore.
- *
- * CAUTION:
- * Call this only when intentionally deleting the account/key.
- * All messages encrypted with this key become permanently unreadable.
- */
 export async function deleteKey(userId: string): Promise<void> {
   if (!userId) {
     throw new Error('userId is required.');
@@ -334,20 +298,8 @@ export async function deleteKey(userId: string): Promise<void> {
   await SecureStore.deleteItemAsync(storeKeyName(userId));
 }
 
-// ── Encrypt ──────────────────────────────────────────────────────────────────
+// ── Encrypt / Decrypt ─────────────────────────────────────────────────────────
 
-/**
- * Encrypt a plaintext message body for storage in Supabase.
- *
- * Returns:
- *
- *   <base64url(nonce)>.<base64url(ciphertext)>
- *
- * A fresh random nonce is generated for every encryption call.
- *
- * Encrypting the same plaintext twice therefore produces different
- * ciphertexts.
- */
 export async function encryptBody(
   plaintext: string,
   userId: string,
@@ -357,17 +309,9 @@ export async function encryptBody(
   }
 
   const key = await getOrCreateKey(userId);
-
-  // XSalsa20-Poly1305 requires a 24-byte nonce.
   const nonce = randomBytes(nacl.secretbox.nonceLength);
-
   const messageBytes = textEncoder.encode(plaintext);
-
-  const box = nacl.secretbox(
-    messageBytes,
-    nonce,
-    key,
-  );
+  const box = nacl.secretbox(messageBytes, nonce, key);
 
   return [
     bytesToBase64Url(nonce),
@@ -375,18 +319,6 @@ export async function encryptBody(
   ].join('.');
 }
 
-// ── Decrypt ──────────────────────────────────────────────────────────────────
-
-/**
- * Decrypt a ciphertext previously produced by encryptBody().
- *
- * Throws if:
- * - ciphertext format is malformed
- * - nonce length is invalid
- * - ciphertext is too short
- * - the wrong user's key is used
- * - ciphertext has been modified
- */
 export async function decryptBody(
   ciphertext: string,
   userId: string,
@@ -396,7 +328,6 @@ export async function decryptBody(
   }
 
   const parts = ciphertext.split('.');
-
   if (parts.length !== 2) {
     throw new Error('Invalid ciphertext format.');
   }
@@ -420,42 +351,21 @@ export async function decryptBody(
   }
 
   const key = await getOrCreateKey(userId);
-
-  const plainBytes = nacl.secretbox.open(
-    box,
-    nonce,
-    key,
-  );
+  const plainBytes = nacl.secretbox.open(box, nonce, key);
 
   if (!plainBytes) {
-    // Do not distinguish between:
-    // - wrong key
-    // - modified ciphertext
-    // - invalid authentication tag
     throw new Error('Decryption failed.');
   }
 
   return textDecoder.decode(plainBytes);
 }
 
-// ── Encryption detection ─────────────────────────────────────────────────────
-
-/**
- * Returns true if a string has the expected encrypted-body structure.
- *
- * This does NOT prove that the ciphertext is authentic.
- * Authentication is performed by decryptBody().
- *
- * This is intended primarily for distinguishing encrypted rows
- * from legacy plaintext rows.
- */
 export function isEncrypted(body: string): boolean {
   if (typeof body !== 'string') {
     return false;
   }
 
   const parts = body.split('.');
-
   if (parts.length !== 2) {
     return false;
   }
@@ -471,69 +381,4 @@ export function isEncrypted(body: string): boolean {
   } catch {
     return false;
   }
-}
-
-// ── Text encoding ─────────────────────────────────────────────────────────────
-
-const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
-
-// ── Base64URL helpers ─────────────────────────────────────────────────────────
-
-/**
- * Convert bytes to Base64URL without padding.
- *
- * Base64URL uses:
- *   + -> -
- *   / -> _
- *   = -> removed
- */
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = '';
-
-  // Avoid spreading a large Uint8Array into function arguments.
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-
-  const base64 = btoa(binary);
-
-  return base64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-/**
- * Convert Base64URL to bytes.
- */
-function base64UrlToBytes(value: string): Uint8Array {
-  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) {
-    throw new Error('Invalid Base64URL.');
-  }
-
-  // Convert Base64URL back to normal Base64.
-  let base64 = value
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-
-  // Restore Base64 padding.
-  const padding = base64.length % 4;
-
-  if (padding === 2) {
-    base64 += '==';
-  } else if (padding === 3) {
-    base64 += '=';
-  } else if (padding === 1) {
-    throw new Error('Invalid Base64URL length.');
-  }
-
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
 }

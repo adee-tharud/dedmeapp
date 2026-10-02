@@ -33,7 +33,7 @@ export async function saveCaregiver(input: SaveCaregiverInput): Promise<Caregive
 
   const { data, error } = await supabase
     .from('caregivers')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     .insert(row as any)
     .select()
     .single();
