@@ -32,7 +32,7 @@ export async function getProfile(userId: string): Promise<ProfileRow | null> {
 export async function upsertProfile(profile: ProfileInsert): Promise<ProfileRow> {
   const { data, error } = await supabase
     .from('profiles')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     .upsert(profile as any)
     .select()
     .single();
@@ -50,7 +50,7 @@ export async function updateProfile(
 ): Promise<ProfileRow> {
   const { data, error } = await supabase
     .from('profiles')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     .update(updates as unknown as never)
     .eq('id', userId)
     .select()

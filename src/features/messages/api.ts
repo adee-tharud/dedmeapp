@@ -127,7 +127,7 @@ export async function createMessage(input: CreateMessageInput): Promise<Decrypte
 
   const { data, error } = await supabase
     .from('messages')
-    .insert(row as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    .insert(row as any)  
     .select()
     .single();
 
