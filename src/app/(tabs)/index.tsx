@@ -1,3 +1,10 @@
+/**
+ * Home screen — the main dashboard.
+ *
+ * Security Guide §5: all Supabase calls in features/<feature>/api.ts.
+ * Security Guide §6: React Query for all data fetching; user.id read once
+ *   from auth context and passed into hooks — never called inside queries.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -8,12 +15,22 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getProfile } from '../../features/auth/profilesApi';
+import {
+  checkInKeys,
+  fetchLatestCheckIn,
+  recordCheckIn,
+  isCheckedInToday,
+  nextCheckInDue,
+} from '../../features/checkin/api';
+import { getCaregivers } from '../../features/contacts/api';
 
 const { width } = Dimensions.get('window');
 const BTN_SIZE = width * 0.62;
@@ -26,29 +43,18 @@ function greeting() {
 }
 
 export default function HomeScreen() {
+  // §6: read user.id once from auth context; pass into all queries
   const { user } = useAuth();
-  const [displayName, setDisplayName] = useState<string | null>(null);
-  const [checkedIn, setCheckedIn] = useState(false);
-  const [scale]        = useState(() => new Animated.Value(1));
-  const [pulse1]       = useState(() => new Animated.Value(1));
-  const [pulse2]       = useState(() => new Animated.Value(1));
+  const userId = user?.id ?? '';
+  const qc = useQueryClient();
+
+  // ── Animations ─────────────────────────────────────────────────────────────
+  const [scale]         = useState(() => new Animated.Value(1));
+  const [pulse1]        = useState(() => new Animated.Value(1));
+  const [pulse2]        = useState(() => new Animated.Value(1));
   const [pulse1Opacity] = useState(() => new Animated.Value(0.35));
   const [pulse2Opacity] = useState(() => new Animated.Value(0.2));
 
-  // Fetch the user's display name from their profile row
-  useEffect(() => {
-    if (!user) return;
-    getProfile(user.id)
-      .then(profile => {
-        if (profile?.name) {
-          // Show only the first name for a friendly greeting
-          setDisplayName(profile.name.trim().split(' ')[0]);
-        }
-      })
-      .catch(() => { /* silently ignore — name is non-critical */ });
-  }, [user]);
-
-  // Idle pulse rings
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -80,24 +86,69 @@ export default function HomeScreen() {
     return () => { loop.stop(); loop2.stop(); };
   }, [pulse1, pulse1Opacity, pulse2, pulse2Opacity]);
 
+  // ── Data fetching (React Query) ────────────────────────────────────────────
+
+  // Profile: display name + check-in frequency
+  const { data: profile } = useQuery({
+    queryKey: ['profiles', userId],
+    queryFn: () => getProfile(userId),
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // cache 5 min — changes infrequently
+  });
+
+  // Latest check-in
+  const { data: latestCheckIn } = useQuery({
+    queryKey: checkInKeys.latest(userId),
+    queryFn: () => fetchLatestCheckIn(userId),
+    enabled: !!userId,
+    staleTime: 60 * 1000, // re-fetch after 1 min
+  });
+
+  // Caregivers: show primary caregiver in the card
+  const { data: caregivers } = useQuery({
+    queryKey: ['caregivers', userId],
+    queryFn: () => getCaregivers(userId),
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Derived state ──────────────────────────────────────────────────────────
+  const displayName   = profile?.name?.trim().split(' ')[0] ?? null;
+  const checkedIn     = isCheckedInToday(latestCheckIn?.checked_in_at);
+  const frequencyDays = profile?.check_in_frequency_days ?? 1;
+  const dueIn         = nextCheckInDue(latestCheckIn?.checked_in_at ?? null, frequencyDays);
+  const primaryCaregiver = caregivers?.[0] ?? null;
+
+  // ── Check-in mutation ──────────────────────────────────────────────────────
+  const checkInMutation = useMutation({
+    mutationFn: () => recordCheckIn(userId),
+    onSuccess: () => {
+      // §6: invalidate the latest check-in query so UI re-fetches fresh data
+      qc.invalidateQueries({ queryKey: checkInKeys.latest(userId) });
+    },
+  });
+
   const handleCheckIn = () => {
+    if (checkedIn || checkInMutation.isPending || !userId) return;
+
     // Tap pop animation
     Animated.sequence([
       Animated.spring(scale, { toValue: 0.92, useNativeDriver: true, speed: 40 }),
       Animated.spring(scale, { toValue: 1.06, useNativeDriver: true, speed: 20 }),
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 15 }),
     ]).start();
-    setCheckedIn(true);
-    // TODO: record check-in in Supabase
+
+    checkInMutation.mutate();
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ────────────────────────────────────────────────────────  */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{greeting()}</Text>
@@ -112,7 +163,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Check-in button ───────────────────────────────────────────────  */}
+        {/* ── Check-in button ──────────────────────────────────────────────── */}
         <View style={styles.checkInSection}>
           {/* Outer pulse rings */}
           <Animated.View
@@ -136,13 +187,18 @@ export default function HomeScreen() {
               onPress={handleCheckIn}
               activeOpacity={0.9}
               accessibilityRole="button"
-              accessibilityLabel={checkedIn ? "Checked in" : "Check in — I'm okay"}
+              accessibilityLabel={checkedIn ? 'Checked in' : "Check in — I'm okay"}
+              disabled={checkedIn || checkInMutation.isPending}
             >
-              <Image
-                source={require('../../../assets/logo1.png')}
-                style={styles.mascot}
-                resizeMode="contain"
-              />
+              {checkInMutation.isPending ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Image
+                  source={require('../../../assets/logo1.png')}
+                  style={styles.mascot}
+                  resizeMode="contain"
+                />
+              )}
               <Text style={styles.checkInLabel}>
                 {checkedIn ? '✓ Checked in!' : "I'm okay"}
               </Text>
@@ -153,31 +209,47 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
 
-        {/* ── Next due ──────────────────────────────────────────────────────  */}
+        {/* ── Next due ────────────────────────────────────────────────────── */}
         <View style={styles.dueRow}>
           <Text style={styles.dueIcon}>◷</Text>
           <Text style={styles.dueText}>
-            Next check-in due in <Text style={styles.dueBold}>1 day 4 hours</Text>
+            {checkedIn
+              ? <>Next check-in due in <Text style={styles.dueBold}>{dueIn}</Text></>
+              : <Text style={styles.dueBold}>Check-in due — tap the button!</Text>
+            }
           </Text>
         </View>
 
-        {/* ── Info cards ────────────────────────────────────────────────────  */}
+        {/* ── Info cards ──────────────────────────────────────────────────── */}
         <View style={styles.cardsRow}>
           {/* Caregiver card */}
           <TouchableOpacity
             style={styles.card}
             activeOpacity={0.85}
-            accessibilityLabel="Your caregiver: Maya"
+            accessibilityLabel={`Your caregiver: ${primaryCaregiver?.name ?? 'Not set'}`}
           >
             <View style={styles.cardIconWrap}>
               <Text style={styles.cardIcon}>◎</Text>
             </View>
             <View style={styles.cardContent}>
               <Text style={styles.cardLabel}>Caregiver</Text>
-              <View style={styles.cardValueRow}>
-                <Text style={styles.cardValue} numberOfLines={1}>Maya accept...</Text>
-                <View style={styles.onlineDot} />
-              </View>
+              {primaryCaregiver ? (
+                <View style={styles.cardValueRow}>
+                  <Text style={styles.cardValue} numberOfLines={1}>
+                    {primaryCaregiver.name}
+                  </Text>
+                  <View style={[
+                    styles.statusDot,
+                    primaryCaregiver.status === 'accepted'
+                      ? styles.statusDotActive
+                      : styles.statusDotPending,
+                  ]} />
+                </View>
+              ) : (
+                <Text style={[styles.cardValue, { color: colors.grey[400] }]}>
+                  Not set
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
 
@@ -186,26 +258,37 @@ export default function HomeScreen() {
             style={styles.card}
             onPress={() => router.push('/(tabs)/messages')}
             activeOpacity={0.85}
-            accessibilityLabel="Messages: 2 saved"
+            accessibilityLabel="Messages"
           >
             <View style={[styles.cardIconWrap, styles.cardIconWarmWrap]}>
               <Text style={styles.cardIcon}>♡</Text>
             </View>
             <View style={styles.cardContent}>
               <Text style={styles.cardLabel}>Messages</Text>
-              <Text style={styles.cardValue}>2 saved</Text>
+              <Text style={styles.cardValue}>My letters</Text>
             </View>
             <Text style={styles.cardChevron}>›</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Protection banner ─────────────────────────────────────────────  */}
+        {/* ── Protection banner ────────────────────────────────────────────── */}
         <View style={styles.protectionBanner}>
           <Text style={styles.protectionIcon}>⊙</Text>
           <Text style={styles.protectionText}>
-            Your circle is set up and everything is protected.
+            {primaryCaregiver
+              ? `${primaryCaregiver.name} is watching over you.`
+              : 'Add a caregiver to activate your protection.'}
           </Text>
         </View>
+
+        {/* ── Check-in error ───────────────────────────────────────────────── */}
+        {checkInMutation.isError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>
+              Could not record check-in. Please try again.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -337,7 +420,9 @@ const styles = StyleSheet.create({
   cardLabel: { fontSize: fontSizes.xs, color: colors.grey[400], fontWeight: fontWeights.medium },
   cardValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   cardValue: { fontSize: fontSizes.sm, fontWeight: fontWeights.bold, color: colors.brand[900] },
-  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusDotActive: { backgroundColor: colors.success },
+  statusDotPending: { backgroundColor: colors.grey[300] },
   cardChevron: { fontSize: fontSizes.lg, color: colors.grey[300] },
 
   // Protection banner
@@ -362,4 +447,15 @@ const styles = StyleSheet.create({
     color: colors.brand[800],
     fontWeight: fontWeights.medium,
   },
+
+  // Error
+  errorBanner: {
+    width: '100%',
+    backgroundColor: '#FFF0F0',
+    borderRadius: radii.lg,
+    padding: spacing[3],
+    borderWidth: 1,
+    borderColor: '#FFCCCC',
+  },
+  errorText: { color: '#CC0000', fontSize: fontSizes.sm, textAlign: 'center' },
 });

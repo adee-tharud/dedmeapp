@@ -8,8 +8,11 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { colors } from '../theme/tokens';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
+
+const queryClient = new QueryClient();
 
 /** Inner component that can use the auth context provided above it. */
 function RootNavigator() {
@@ -57,8 +60,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

@@ -55,7 +55,9 @@ export default function SignUpScreen() {
       // session; the user will be fully authenticated once they click the
       // link in their inbox. We proceed rather than blocking onboarding.
       if (data.user) {
-        router.push('/(onboarding)/caregiver');
+        // Pass userId as a param so caregiver screen can save the row
+        // even before the email is confirmed (session will be null until then).
+        router.push({ pathname: '/(onboarding)/caregiver', params: { userId: data.user.id } });
       } else {
         // Unexpected: no user and no error — surface clearly.
         setError('Account could not be created. Please try again.');

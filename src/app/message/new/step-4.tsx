@@ -1,16 +1,21 @@
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { StepIndicator } from '../../../components/ui/StepIndicator';
 import { Button } from '../../../components/ui/Button';
 import { useDraftStore } from '../../../features/messages/useDraftStore';
+import { createMessage, messageKeys } from '../../../features/messages/api';
+import { useAuth } from '../../../features/auth/AuthContext';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/tokens';
 
 function ReviewRow({
@@ -39,7 +44,11 @@ function ReviewRow({
 }
 
 export default function Step4Screen() {
-  const { recipientName, recipientEmail, body, timing, confirmed, setConfirmed, reset } = useDraftStore();
+  const { recipientName, recipientEmail, recipientPhone, body, timing, confirmed, setConfirmed, reset } = useDraftStore();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const timingLabel =
     timing === 'full_plan' ? 'After the full check-in plan' : 'After a longer wait';
@@ -48,9 +57,29 @@ export default function Step4Screen() {
     body.length > 60 ? `"${body.slice(0, 60)}…"` : `"${body}"`;
 
   const handleActivate = async () => {
-    // TODO: save to Supabase
-    reset();
-    router.replace('/message/new/step-5');
+    if (!user) return;
+    setSaveError('');
+    setSaving(true);
+    try {
+      // createMessage encrypts the body before sending to Supabase
+      await createMessage({
+        userId:         user.id,
+        recipientName,
+        recipientEmail,
+        recipientPhone: recipientPhone || undefined,
+        body,
+        timingType:     timing,
+      });
+      // Invalidate the messages list so it refetches with the new message
+      await qc.invalidateQueries({ queryKey: messageKeys.byUser(user.id) });
+      reset(); // clear draft store only after successful save
+      router.replace('/message/new/step-5');
+    } catch (err: unknown) {
+      console.error('[Step4] createMessage failed:', err);
+      setSaveError('Could not save your message. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -114,15 +143,30 @@ export default function Step4Screen() {
           </Text>
         </TouchableOpacity>
 
+        {/* ── Error banner ──────────────────────────────────────────────────  */}
+        {saveError ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={16} color="#CC0000" />
+            <Text style={styles.errorText}>{saveError}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.spacer} />
 
         {/* ── Activate button ───────────────────────────────────────────────  */}
-        <Button
-          label="Save and activate"
-          onPress={handleActivate}
-          disabled={!confirmed}
-          style={[styles.activateBtn, !confirmed && styles.activateBtnDisabled,]}
-        />
+        {saving ? (
+          <View style={styles.savingRow}>
+            <ActivityIndicator color={colors.brand[700]} />
+            <Text style={styles.savingText}>Encrypting and saving…</Text>
+          </View>
+        ) : (
+          <Button
+            label="Save and activate"
+            onPress={handleActivate}
+            disabled={!confirmed || saving}
+            style={[styles.activateBtn, !confirmed && styles.activateBtnDisabled]}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -174,4 +218,15 @@ const styles = StyleSheet.create({
   spacer: { flex: 1, minHeight: spacing[6] },
   activateBtn: { borderRadius: radii.full },
   activateBtnDisabled: { opacity: 0.45 },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
+    backgroundColor: '#FFF0F0', borderRadius: radii.lg,
+    padding: spacing[3], borderWidth: 1, borderColor: '#FFCCCC',
+  },
+  errorText: { flex: 1, color: '#CC0000', fontSize: fontSizes.sm },
+  savingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing[3], paddingVertical: spacing[4],
+  },
+  savingText: { color: colors.brand[700], fontWeight: fontWeights.medium, fontSize: fontSizes.md },
 });

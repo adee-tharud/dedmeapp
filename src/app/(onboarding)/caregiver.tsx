@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
@@ -20,7 +20,11 @@ import { saveCaregiver } from '../../features/contacts/api';
 const RELATIONSHIPS = ['Partner', 'Parent', 'Sibling', 'Friend', 'Child', 'Other'];
 
 export default function CaregiverScreen() {
+  // userId comes from sign-up route param (session is null until email confirmed).
+  // Fall back to session user for cases where screen is reached with a live session.
+  const params = useLocalSearchParams<{ userId?: string }>();
   const { user } = useAuth();
+  const userId = params.userId ?? user?.id;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -32,12 +36,16 @@ export default function CaregiverScreen() {
   const canContinue = name.trim().length > 0 && email.trim().length > 0 && relationship.length > 0;
 
   const handleNext = async () => {
-    if (!canContinue || !user) return;
+    if (!canContinue) return;
+    if (!userId) {
+      setError('Session expired. Please go back and sign in again.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       await saveCaregiver({
-        userId:       user.id,
+        userId,
         name,
         email,
         phone:        phone || undefined,
@@ -45,7 +53,6 @@ export default function CaregiverScreen() {
       });
       router.push('/(onboarding)/plan');
     } catch (err: unknown) {
-      // Log the real error so it's visible during development
       console.error('[CaregiverScreen] saveCaregiver failed:', err);
       setError(err instanceof Error ? err.message : 'Could not save caregiver. Please try again.');
     } finally {
