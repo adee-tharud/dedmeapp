@@ -1,8 +1,8 @@
 /**
  * Home screen — the main dashboard.
  *
- * Security Guide §5: all Supabase calls in features/<feature>/api.ts.
- * Security Guide §6: React Query for all data fetching; user.id read once
+ * Security Guide §5: all Supabase calls in feature service files.
+ * Security Guide §6: data fetching via hook layer; user.id read once
  *   from auth context and passed into hooks — never called inside queries.
  */
 import React, { useEffect, useState } from 'react';
@@ -19,34 +19,20 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
-import { useAuth } from '../../features/auth/AuthContext';
-import { getProfile } from '../../features/auth/profilesApi';
-import {
-  checkInKeys,
-  fetchLatestCheckIn,
-  recordCheckIn,
-  isCheckedInToday,
-  nextCheckInDue,
-} from '../../features/checkin/api';
-import { getCaregivers } from '../../features/contacts/api';
+import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAuth } from '@/features/auth/AuthContext';
+import { useProfile } from '@/features/auth';
+import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday, nextCheckInDue } from '@/features/checkin';
+import { useCaregivers } from '@/features/contacts';
+import { timeBasedGreeting } from '@/utils';
 
 const { width } = Dimensions.get('window');
 const BTN_SIZE = width * 0.62;
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 export default function HomeScreen() {
-  // §6: read user.id once from auth context; pass into all queries
+  // §6: read user.id once from auth context; pass into all hooks
   const { user } = useAuth();
   const userId = user?.id ?? '';
-  const qc = useQueryClient();
 
   // ── Animations ─────────────────────────────────────────────────────────────
   const [scale]         = useState(() => new Animated.Value(1));
@@ -86,47 +72,20 @@ export default function HomeScreen() {
     return () => { loop.stop(); loop2.stop(); };
   }, [pulse1, pulse1Opacity, pulse2, pulse2Opacity]);
 
-  // ── Data fetching (React Query) ────────────────────────────────────────────
-
-  // Profile: display name + check-in frequency
-  const { data: profile } = useQuery({
-    queryKey: ['profiles', userId],
-    queryFn: () => getProfile(userId),
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // cache 5 min — changes infrequently
-  });
-
-  // Latest check-in
-  const { data: latestCheckIn } = useQuery({
-    queryKey: checkInKeys.latest(userId),
-    queryFn: () => fetchLatestCheckIn(userId),
-    enabled: !!userId,
-    staleTime: 60 * 1000, // re-fetch after 1 min
-  });
-
-  // Caregivers: show primary caregiver in the card
-  const { data: caregivers } = useQuery({
-    queryKey: ['caregivers', userId],
-    queryFn: () => getCaregivers(userId),
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000,
-  });
+  // ── Data fetching — via hook layer, never raw service calls ───────────────
+  const { data: profile }      = useProfile();
+  const { data: latestCheckIn } = useLatestCheckIn(userId);
+  const { data: caregivers }   = useCaregivers(userId);
 
   // ── Derived state ──────────────────────────────────────────────────────────
-  const displayName   = profile?.name?.trim().split(' ')[0] ?? null;
-  const checkedIn     = isCheckedInToday(latestCheckIn?.checked_in_at);
-  const frequencyDays = profile?.check_in_frequency_days ?? 1;
-  const dueIn         = nextCheckInDue(latestCheckIn?.checked_in_at ?? null, frequencyDays);
+  const displayName      = profile?.name?.trim().split(' ')[0] ?? null;
+  const checkedIn        = isCheckedInToday(latestCheckIn?.checked_in_at);
+  const frequencyDays    = profile?.check_in_frequency_days ?? 1;
+  const dueIn            = nextCheckInDue(latestCheckIn?.checked_in_at ?? null, frequencyDays);
   const primaryCaregiver = caregivers?.[0] ?? null;
 
-  // ── Check-in mutation ──────────────────────────────────────────────────────
-  const checkInMutation = useMutation({
-    mutationFn: () => recordCheckIn(userId),
-    onSuccess: () => {
-      // §6: invalidate the latest check-in query so UI re-fetches fresh data
-      qc.invalidateQueries({ queryKey: checkInKeys.latest(userId) });
-    },
-  });
+  // ── Check-in mutation — via hook layer ────────────────────────────────────
+  const checkInMutation = useRecordCheckIn(userId);
 
   const handleCheckIn = () => {
     if (checkedIn || checkInMutation.isPending || !userId) return;
@@ -151,7 +110,7 @@ export default function HomeScreen() {
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>{greeting()}</Text>
+            <Text style={styles.greeting}>{timeBasedGreeting()}</Text>
             <Text style={styles.name}>Hey, {displayName ?? 'there'} 👋</Text>
           </View>
           <TouchableOpacity

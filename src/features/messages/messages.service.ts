@@ -10,7 +10,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
-import { encryptBody, decryptBody, isEncrypted } from './crypto';
+import { encryptBody, decryptBody, isEncrypted } from './messages.crypto';
 
 type MessageRow    = Database['public']['Tables']['messages']['Row'];
 type MessageInsert = Database['public']['Tables']['messages']['Insert'];

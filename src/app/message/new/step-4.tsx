@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,11 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
-import { StepIndicator } from '../../../components/ui/StepIndicator';
-import { Button } from '../../../components/ui/Button';
-import { useDraftStore } from '../../../features/messages/useDraftStore';
-import { createMessage, messageKeys } from '../../../features/messages/api';
-import { useAuth } from '../../../features/auth/AuthContext';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/tokens';
+import { StepIndicator } from '@/components/ui/StepIndicator';
+import { Button } from '@/components/ui/Button';
+import { useDraftStore, useCreateMessage } from '@/features/messages';
+import { useAuth } from '@/features/auth/AuthContext';
+import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
 
 function ReviewRow({
   sectionLabel,
@@ -46,9 +44,9 @@ function ReviewRow({
 export default function Step4Screen() {
   const { recipientName, recipientEmail, recipientPhone, body, timing, confirmed, setConfirmed, reset } = useDraftStore();
   const { user } = useAuth();
-  const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
+
+  // ✅ Hook handles encryption, Supabase insert, and cache invalidation
+  const createMessage = useCreateMessage(user?.id ?? '');
 
   const timingLabel =
     timing === 'full_plan' ? 'After the full check-in plan' : 'After a longer wait';
@@ -56,30 +54,27 @@ export default function Step4Screen() {
   const bodyPreview =
     body.length > 60 ? `"${body.slice(0, 60)}…"` : `"${body}"`;
 
-  const handleActivate = async () => {
+  const handleActivate = () => {
     if (!user) return;
-    setSaveError('');
-    setSaving(true);
-    try {
-      // createMessage encrypts the body before sending to Supabase
-      await createMessage({
+    createMessage.mutate(
+      {
         userId:         user.id,
         recipientName,
         recipientEmail,
         recipientPhone: recipientPhone || undefined,
         body,
         timingType:     timing,
-      });
-      // Invalidate the messages list so it refetches with the new message
-      await qc.invalidateQueries({ queryKey: messageKeys.byUser(user.id) });
-      reset(); // clear draft store only after successful save
-      router.replace('/message/new/step-5');
-    } catch (err: unknown) {
-      console.error('[Step4] createMessage failed:', err);
-      setSaveError('Could not save your message. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+      },
+      {
+        onSuccess: () => {
+          reset(); // clear draft store only after successful save
+          router.replace('/message/new/step-5');
+        },
+        onError: (err) => {
+          console.error('[Step4] createMessage failed:', err);
+        },
+      },
+    );
   };
 
   return (
@@ -144,17 +139,17 @@ export default function Step4Screen() {
         </TouchableOpacity>
 
         {/* ── Error banner ──────────────────────────────────────────────────  */}
-        {saveError ? (
+        {createMessage.isError ? (
           <View style={styles.errorBanner}>
             <Ionicons name="alert-circle-outline" size={16} color="#CC0000" />
-            <Text style={styles.errorText}>{saveError}</Text>
+            <Text style={styles.errorText}>Could not save your message. Please try again.</Text>
           </View>
         ) : null}
 
         <View style={styles.spacer} />
 
         {/* ── Activate button ───────────────────────────────────────────────  */}
-        {saving ? (
+        {createMessage.isPending ? (
           <View style={styles.savingRow}>
             <ActivityIndicator color={colors.brand[700]} />
             <Text style={styles.savingText}>Encrypting and saving…</Text>
@@ -163,7 +158,7 @@ export default function Step4Screen() {
           <Button
             label="Save and activate"
             onPress={handleActivate}
-            disabled={!confirmed || saving}
+            disabled={!confirmed || createMessage.isPending}
             style={[styles.activateBtn, !confirmed && styles.activateBtnDisabled]}
           />
         )}
