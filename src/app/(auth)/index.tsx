@@ -22,8 +22,7 @@ import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
-import { signUpSchema } from '@/features/auth/schema';
-import { signUp } from '@/features/auth/api';
+import { signUpSchema, signUp } from '@/features/auth';
 
 export default function SignUpScreen() {
   const [email, setEmail]       = useState('');

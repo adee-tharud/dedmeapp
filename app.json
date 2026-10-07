@@ -18,7 +18,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.deadme.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -33,6 +34,14 @@
         }
       ],
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "root": "src/app"
+      },
+      "eas": {
+        "projectId": "6e64a881-fb6d-4cad-acf8-977996dc1777"
+      }
+    }
   }
 }

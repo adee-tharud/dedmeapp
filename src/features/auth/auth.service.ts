@@ -6,7 +6,7 @@
  * never navigate forward on failure or swallow the error silently.
  */
 import { supabase } from '@/lib/supabase';
-import type { SignUpInput, SignInInput } from './schema';
+import type { SignUpInput, SignInInput } from './auth.schema';
 
 /**
  * Sign up a new user with email + password.

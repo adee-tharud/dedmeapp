@@ -7,11 +7,15 @@ import {
   ScrollView,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAuth } from '@/features/auth/AuthContext';
+import { useProfile, useSignOut } from '@/features/auth';
+import { avatarInitial } from '@/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type RowItem =
@@ -71,9 +75,22 @@ function SectionGroup({ title, rows }: { title?: string; rows: RowItem[] }) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
+  const { user } = useAuth();
+  const { data: profile, isLoading: profileLoading } = useProfile();
+  const signOutMutation = useSignOut();
+
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  // Derived profile display values
+  const displayName  = profile?.name ?? user?.email?.split('@')[0] ?? 'You';
+  const displayEmail = user?.email ?? '';
+  const avatarLetter = avatarInitial(displayName);
+
+  // Frequency sublabel
+  const freqDays = profile?.check_in_frequency_days ?? 1;
+  const freqLabel = freqDays === 1 ? 'Every 24 hours' : `Every ${freqDays} days`;
 
   const handleLogout = () => {
     Alert.alert(
@@ -85,8 +102,11 @@ export default function SettingsScreen() {
           text: 'Log out',
           style: 'destructive',
           onPress: () => {
-            // TODO: clear Supabase session
-            router.replace('/(auth)/');
+            signOutMutation.mutate(undefined, {
+              onSuccess: () => router.replace('/(auth)/'),
+              onError: () =>
+                Alert.alert('Error', 'Could not log out. Please try again.'),
+            });
           },
         },
       ],
@@ -125,11 +145,15 @@ export default function SettingsScreen() {
         >
           {/* Avatar */}
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>A</Text>
+            {profileLoading ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.avatarText}>{avatarLetter}</Text>
+            )}
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Alex Johnson</Text>
-            <Text style={styles.profileEmail}>alex@example.com</Text>
+            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.profileEmail}>{displayEmail}</Text>
           </View>
           <View style={styles.profileBadge}>
             <Text style={styles.profileBadgeText}>Yearly</Text>
@@ -147,7 +171,7 @@ export default function SettingsScreen() {
               iconColor: colors.brand[600],
               iconBg: colors.brand[100],
               label: 'Check-in frequency',
-              sublabel: 'Every 24 hours',
+              sublabel: freqLabel,
               onPress: () => {},
             },
             {
@@ -261,12 +285,17 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={styles.row}
               onPress={handleLogout}
+              disabled={signOutMutation.isPending}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Log out"
             >
               <View style={[styles.rowIcon, { backgroundColor: '#FFF0F0' }]}>
-                <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+                {signOutMutation.isPending ? (
+                  <ActivityIndicator size="small" color={colors.danger} />
+                ) : (
+                  <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+                )}
               </View>
               <View style={styles.rowContent}>
                 <Text style={[styles.rowLabel, { color: colors.danger }]}>Log out</Text>

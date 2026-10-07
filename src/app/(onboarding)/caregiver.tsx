@@ -15,7 +15,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
 import { useAuth } from '../../features/auth/AuthContext';
-import { saveCaregiver } from '../../features/contacts/api';
+import { saveCaregiver } from '@/features/contacts';
 
 const RELATIONSHIPS = ['Partner', 'Parent', 'Sibling', 'Friend', 'Child', 'Other'];
 

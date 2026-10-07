@@ -21,8 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
-import { signInSchema } from '@/features/auth/schema';
-import { signIn } from '@/features/auth/api';
+import { signInSchema, signIn } from '@/features/auth';
 
 export default function SignInScreen() {
   const [email, setEmail]       = useState('');

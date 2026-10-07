@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StepIndicator } from '../../../components/ui/StepIndicator';
 import { Button } from '../../../components/ui/Button';
-import { useDraftStore } from '../../../features/messages/useDraftStore';
+import { useDraftStore } from '@/features/messages';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/tokens';
 
 export default function Step2Screen() {

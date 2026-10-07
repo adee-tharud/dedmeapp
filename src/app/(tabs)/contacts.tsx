@@ -6,30 +6,43 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAuth } from '@/features/auth/AuthContext';
+import { useCaregivers } from '@/features/contacts';
+import { avatarInitial } from '@/utils';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const CIRCLE_MEMBERS = [
-  {
-    id: '1',
-    name: 'Maya Chen',
-    initial: 'M',
-    avatarColor: colors.brand[100],
-    initialColor: colors.brand[700],
-    relationship: 'Sister · Caregiver',
-    status: 'CONNECTED' as const,
-  },
-];
+// ── Status config ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  CONNECTED: { bg: '#E6F9EE', text: '#1A8A47', label: 'CONNECTED' },
-  PENDING:   { bg: '#FFF7E0', text: '#A87820', label: 'PENDING' },
-};
+  accepted: { bg: '#E6F9EE', text: '#1A8A47', label: 'CONNECTED' },
+  pending:  { bg: '#FFF7E0', text: '#A87820', label: 'PENDING' },
+} as const;
+
+// ── Caregiver avatar palette ──────────────────────────────────────────────────
+
+function avatarColors(index: number): { bg: string; text: string } {
+  const palette = [
+    { bg: colors.brand[100], text: colors.brand[700] },
+    { bg: '#FFF0E0', text: '#C07830' },
+    { bg: '#F0E8FF', text: '#7B2FBE' },
+    { bg: '#E0F7FA', text: '#00838F' },
+  ];
+  return palette[index % palette.length];
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function ContactsScreen() {
+  const { user } = useAuth();
+  const userId = user?.id ?? '';
+
+  // ✅ Real data from Supabase via hook layer
+  const { data: caregivers, isLoading, isError, refetch } = useCaregivers(userId);
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -54,39 +67,71 @@ export default function ContactsScreen() {
           </Text>
         </View>
 
+        {/* ── Loading ───────────────────────────────────────────────────────  */}
+        {isLoading && (
+          <View style={styles.centerState}>
+            <ActivityIndicator color={colors.brand[600]} size="large" />
+            <Text style={styles.centerStateText}>Loading your circle…</Text>
+          </View>
+        )}
+
+        {/* ── Error ─────────────────────────────────────────────────────────  */}
+        {isError && (
+          <TouchableOpacity style={styles.errorBanner} onPress={() => refetch()}>
+            <Ionicons name="alert-circle-outline" size={18} color="#CC0000" />
+            <Text style={styles.errorText}>Could not load contacts. Tap to retry.</Text>
+          </TouchableOpacity>
+        )}
+
         {/* ── Circle members ────────────────────────────────────────────────  */}
-        <View style={styles.memberList}>
-          {CIRCLE_MEMBERS.map(member => {
-            const sc = STATUS_CONFIG[member.status];
-            return (
-              <TouchableOpacity
-                key={member.id}
-                style={styles.memberCard}
-                activeOpacity={0.85}
-                accessibilityLabel={`${member.name}, ${member.relationship}, ${member.status}`}
-                accessibilityRole="button"
-              >
-                {/* Avatar */}
-                <View style={[styles.avatar, { backgroundColor: member.avatarColor }]}>
-                  <Text style={[styles.avatarText, { color: member.initialColor }]}>
-                    {member.initial}
-                  </Text>
-                </View>
+        {!isLoading && !isError && (caregivers?.length ?? 0) > 0 && (
+          <View style={styles.memberList}>
+            {caregivers!.map((caregiver, i) => {
+              const sc = STATUS_CONFIG[caregiver.status];
+              const av = avatarColors(i);
+              return (
+                <TouchableOpacity
+                  key={caregiver.id}
+                  style={styles.memberCard}
+                  activeOpacity={0.85}
+                  accessibilityLabel={`${caregiver.name}, ${caregiver.relationship ?? 'Caregiver'}, ${sc.label}`}
+                  accessibilityRole="button"
+                >
+                  {/* Avatar */}
+                  <View style={[styles.avatar, { backgroundColor: av.bg }]}>
+                    <Text style={[styles.avatarText, { color: av.text }]}>
+                      {avatarInitial(caregiver.name)}
+                    </Text>
+                  </View>
 
-                {/* Info */}
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{member.name}</Text>
-                  <Text style={styles.memberRelation}>{member.relationship}</Text>
-                </View>
+                  {/* Info */}
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>{caregiver.name}</Text>
+                    <Text style={styles.memberRelation}>
+                      {caregiver.relationship ?? 'Caregiver'}
+                    </Text>
+                  </View>
 
-                {/* Status badge */}
-                <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-                  <Text style={[styles.statusText, { color: sc.text }]}>{sc.label}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  {/* Status badge */}
+                  <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+                    <Text style={[styles.statusText, { color: sc.text }]}>{sc.label}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Empty state ───────────────────────────────────────────────────  */}
+        {!isLoading && !isError && (caregivers?.length ?? 0) === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>👥</Text>
+            <Text style={styles.emptyTitle}>No caregivers yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Add a trusted person to your circle. They&apos;ll only be contacted if you stop checking in.
+            </Text>
+          </View>
+        )}
 
         {/* ── Invite someone ────────────────────────────────────────────────  */}
         <TouchableOpacity
@@ -158,6 +203,25 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.grey[500],
     lineHeight: fontSizes.md * 1.5,
+  },
+
+  // Loading / Error
+  centerState: { alignItems: 'center', gap: spacing[3], paddingVertical: spacing[6] },
+  centerStateText: { fontSize: fontSizes.sm, color: colors.grey[400] },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
+    backgroundColor: '#FFF0F0', borderRadius: radii.lg,
+    padding: spacing[4], borderWidth: 1, borderColor: '#FFCCCC',
+  },
+  errorText: { flex: 1, color: '#CC0000', fontSize: fontSizes.sm },
+
+  // Empty state
+  emptyState: { alignItems: 'center', gap: spacing[3], paddingVertical: spacing[6] },
+  emptyIcon: { fontSize: 48 },
+  emptyTitle: { fontSize: fontSizes.xl, fontWeight: fontWeights.bold, color: colors.brand[900] },
+  emptySubtitle: {
+    fontSize: fontSizes.md, color: colors.grey[500],
+    textAlign: 'center', lineHeight: fontSizes.md * 1.5,
   },
 
   // Members

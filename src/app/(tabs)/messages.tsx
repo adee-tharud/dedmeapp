@@ -1,8 +1,8 @@
 /**
  * Secret Messages list screen.
  *
- * Security Guide §5: no Supabase calls inline — all through features/messages/api.ts.
- * Security Guide §6: React Query for data fetching; userId from auth context.
+ * Security Guide §5: no Supabase calls inline — all through hook layer.
+ * Security Guide §6: data fetching via useMessages hook; userId from auth context.
  *
  * Message bodies are decrypted client-side; what you see here is plaintext
  * only after the crypto layer has verified the authentication tag.
@@ -20,11 +20,11 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
-import { useAuth } from '../../features/auth/AuthContext';
-import { fetchMessages, messageKeys } from '../../features/messages/api';
-import type { DecryptedMessage } from '../../features/messages/api';
+import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAuth } from '@/features/auth/AuthContext';
+import { useMessages } from '@/features/messages';
+import type { DecryptedMessage } from '@/features/messages';
+import { formatRelativeDate, bodyPreview, avatarInitial } from '@/utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,35 +48,14 @@ function avatarColors(index: number): { bg: string; text: string } {
   return palette[index % palette.length];
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Updated today';
-  if (diffDays === 1) return 'Updated yesterday';
-  if (diffDays < 7) return `Updated ${diffDays} days ago`;
-  return `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-}
-
-/** Show at most 60 chars of decrypted body as a preview (never the full text). */
-function bodyPreview(body: string): string {
-  const trimmed = body.replace(/\n/g, ' ').trim();
-  if (trimmed.length <= 60) return `"${trimmed}"`;
-  return `"${trimmed.slice(0, 60)}…"`;
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MessagesScreen() {
   const { user } = useAuth();
   const userId = user?.id ?? '';
 
-  const { data: messages, isLoading, isError, refetch } = useQuery({
-    queryKey: messageKeys.byUser(userId),
-    queryFn: () => fetchMessages(userId),
-    enabled: !!userId,
-    staleTime: 60 * 1000,
-  });
+  // ✅ Uses useMessages hook — no raw service call in the screen
+  const { data: messages, isLoading, isError, refetch } = useMessages(userId);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -153,7 +132,7 @@ export default function MessagesScreen() {
                   {/* Avatar */}
                   <View style={[styles.avatar, { backgroundColor: av.bg }]}>
                     <Text style={[styles.avatarText, { color: av.text }]}>
-                      {msg.recipient_name.charAt(0).toUpperCase()}
+                      {avatarInitial(msg.recipient_name)}
                     </Text>
                   </View>
 
@@ -168,7 +147,7 @@ export default function MessagesScreen() {
                     <Text style={styles.preview} numberOfLines={1}>
                       {bodyPreview(msg.body)}
                     </Text>
-                    <Text style={styles.updatedAt}>{formatDate(msg.updated_at)}</Text>
+                    <Text style={styles.updatedAt}>{formatRelativeDate(msg.updated_at)}</Text>
                   </View>
 
                   <Ionicons name="chevron-forward" size={18} color={colors.grey[300]} />
