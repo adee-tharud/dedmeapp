@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import LottieView from 'lottie-react-native';
+import characterAnimation from '../../assets/character.lottie';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../theme/tokens';
 
 const { width } = Dimensions.get('window');
@@ -161,10 +163,11 @@ export default function WelcomeScreen() {
                 opacity: mascotOpacity,
               }}
             >
-              <Image
-                source={require('../../assets/logo1.png')}
+              <LottieView
+                source={characterAnimation}
+                autoPlay
+                loop
                 style={styles.mascot}
-                resizeMode="contain"
               />
             </Animated.View>
           </View>
@@ -233,7 +236,7 @@ export default function WelcomeScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const CIRCLE_OUTER = width * 0.72;
 const CIRCLE_INNER = width * 0.56;
-const MASCOT_SIZE  = width * 0.40;
+const MASCOT_SIZE  = width * 0.52;
 
 const styles = StyleSheet.create({
   safe: {

@@ -1,8 +1,9 @@
 /**
- * Database types — generated from the Supabase schema.
+ * Database types — manually maintained in sync with Supabase migrations.
  *
- * Run `npx supabase gen types typescript --project-id <id> > src/types/database.ts`
- * after every migration to keep this in sync.
+ * Last updated: migration 20261009000000_caregiver_roles_and_push_tokens
+ *
+ * Sync command: `npx supabase gen types typescript --project-id <id> > src/types/database.ts`
  */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -38,13 +39,17 @@ export interface Database {
       caregivers: {
         Row: {
           id: string;
-          user_id: string;
+          user_id: string;              // the monitored person's auth.uid
           name: string;
           email: string;
           phone: string | null;
           relationship: string | null;
           status: 'pending' | 'accepted';
           invite_token: string;
+          /** null until the caregiver signs up and redeems the invite */
+          caregiver_user_id: string | null;
+          /** null while status is 'pending' */
+          accepted_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -56,6 +61,8 @@ export interface Database {
           relationship?: string | null;
           status?: 'pending' | 'accepted';
           invite_token?: string;
+          caregiver_user_id?: string | null;
+          accepted_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -67,6 +74,9 @@ export interface Database {
           relationship?: string | null;
           status?: 'pending' | 'accepted';
           invite_token?: string;
+          /** Set when a caregiver redeems their invite token */
+          caregiver_user_id?: string | null;
+          accepted_at?: string | null;
           created_at?: string;
         };
       };
@@ -139,6 +149,25 @@ export interface Database {
           created_at?: string;
         };
         Update: never; // append-only — no updates allowed
+      };
+      push_tokens: {
+        Row: {
+          id: string;
+          /** The user whose device holds this token (monitored person OR caregiver) */
+          user_id: string;
+          token: string;
+          platform: 'ios' | 'android';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token: string;
+          platform: 'ios' | 'android';
+          created_at?: string;
+        };
+        /** Tokens are replaced (delete + insert), never mutated in place */
+        Update: never;
       };
     };
     Views: Record<string, never>;
