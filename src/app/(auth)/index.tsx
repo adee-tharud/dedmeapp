@@ -56,7 +56,7 @@ export default function SignUpScreen() {
       if (data.user) {
         // Pass userId as a param so caregiver screen can save the row
         // even before the email is confirmed (session will be null until then).
-        router.push({ pathname: '/(onboarding)/caregiver', params: { userId: data.user.id } });
+        router.push({ pathname: '/(onboarding)/role-select', params: { userId: data.user.id } });
       } else {
         // Unexpected: no user and no error — surface clearly.
         setError('Account could not be created. Please try again.');

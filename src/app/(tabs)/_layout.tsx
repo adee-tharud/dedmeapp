@@ -10,19 +10,28 @@ function TabIcon({
   nameFocused,
   label,
   focused,
+  badge,
 }: {
   name: IoniconName;
   nameFocused: IoniconName;
   label: string;
   focused: boolean;
+  badge?: number;
 }) {
   return (
     <View style={tabStyles.wrapper}>
-      <Ionicons
-        name={focused ? nameFocused : name}
-        size={24}
-        color={focused ? colors.brand[700] : colors.grey[400]}
-      />
+      <View>
+        <Ionicons
+          name={focused ? nameFocused : name}
+          size={24}
+          color={focused ? colors.brand[700] : colors.grey[400]}
+        />
+        {badge != null && badge > 0 && (
+          <View style={tabStyles.badge}>
+            <Text style={tabStyles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+          </View>
+        )}
+      </View>
       <Text
         style={[tabStyles.label, focused && tabStyles.labelFocused]}
         numberOfLines={1}
@@ -51,9 +60,31 @@ const tabStyles = StyleSheet.create({
     color: colors.brand[700],
     fontWeight: fontWeights.bold,
   },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#CC0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#fff',
+  },
 });
 
 export default function TabsLayout() {
+  // TODO phase 2: query the DB to determine which tabs to show based on role.
+  // For now all tabs are visible for UI review purposes.
+  // isMember = user has rows where user_id = me
+  // isCaregiver = user has rows where caregiver_user_id = me
+
   return (
     <Tabs
       screenOptions={{
@@ -69,6 +100,7 @@ export default function TabsLayout() {
         tabBarShowLabel: false,
       }}
     >
+      {/* ── Home (monitored person check-in dashboard) ──────────────────── */}
       <Tabs.Screen
         name="index"
         options={{
@@ -82,6 +114,23 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* ── Watching (caregiver dashboard) ─────────────────────────────── */}
+      <Tabs.Screen
+        name="caregiver-home"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              name="eye-outline"
+              nameFocused="eye"
+              label="Watching"
+              focused={focused}
+            />
+          ),
+        }}
+      />
+
+      {/* ── Messages ───────────────────────────────────────────────────── */}
       <Tabs.Screen
         name="messages"
         options={{
@@ -95,6 +144,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* ── Circle / Contacts ──────────────────────────────────────────── */}
       <Tabs.Screen
         name="contacts"
         options={{
@@ -108,6 +159,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* ── Settings ───────────────────────────────────────────────────── */}
       <Tabs.Screen
         name="settings"
         options={{
