@@ -12,6 +12,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { colors } from '../theme/tokens';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
 import { queryClient } from '../lib/queryClient';
+import { useRegisterPushToken } from '../features/notifications';
 
 /** Inner component that can use the auth context provided above it. */
 function RootNavigator() {
@@ -19,6 +20,9 @@ function RootNavigator() {
   const segments = useSegments();
   const router = useRouter();
 
+  // Register push token whenever a session is active.
+  // Gracefully no-ops in Expo Go (see notifications.service).
+  useRegisterPushToken(session?.user?.id ?? '');
   useEffect(() => {
     if (isLoading) return; // still hydrating — don't redirect yet
 

@@ -25,20 +25,21 @@ import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/toke
 import { signUpSchema, signUp } from '@/features/auth';
 
 export default function SignUpScreen() {
+  const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   /** Derive the disabled state from Zod so the button rule matches the submit rule. */
-  const parseResult = signUpSchema.safeParse({ email, password });
+  const parseResult = signUpSchema.safeParse({ name, email, password });
   const isFormValid = parseResult.success;
 
   const handleCreate = async () => {
     setError('');
 
     // Client-side Zod validation (UX convenience — server also validates)
-    const result = signUpSchema.safeParse({ email, password });
+    const result = signUpSchema.safeParse({ name, email, password });
     if (!result.success) {
       setError(result.error.issues[0].message);
       return;
@@ -116,6 +117,15 @@ export default function SignUpScreen() {
 
           {/* ── Form ──────────────────────────────────────────────────────── */}
           <View style={styles.form}>
+            <Input
+              label="Your name"
+              placeholder="e.g. Alice Smith"
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={name}
+              onChangeText={(v) => { setName(v); setError(''); }}
+              textContentType="name"
+            />
             <Input
               label="Email"
               placeholder="you@example.com"

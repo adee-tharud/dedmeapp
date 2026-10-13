@@ -23,7 +23,7 @@ import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useProfile } from '@/features/auth';
 import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday, nextCheckInDue } from '@/features/checkin';
-import { useCaregivers } from '@/features/contacts';
+import { useCaregivers, useCaregiverWatch } from '@/features/contacts';
 import { timeBasedGreeting } from '@/utils';
 
 const { width } = Dimensions.get('window');
@@ -76,6 +76,15 @@ export default function HomeScreen() {
   const { data: profile }      = useProfile();
   const { data: latestCheckIn } = useLatestCheckIn(userId);
   const { data: caregivers }   = useCaregivers(userId);
+  const { data: watchedList }  = useCaregiverWatch(userId);
+
+  const isCaregiverOnly = (watchedList?.length ?? 0) > 0 && (caregivers?.length ?? 0) === 0;
+
+  useEffect(() => {
+    if (isCaregiverOnly) {
+      router.replace('/(tabs)/caregiver-home');
+    }
+  }, [isCaregiverOnly]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
   const displayName      = profile?.name?.trim().split(' ')[0] ?? null;
@@ -101,6 +110,10 @@ export default function HomeScreen() {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  if (isCaregiverOnly) {
+    return null;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView

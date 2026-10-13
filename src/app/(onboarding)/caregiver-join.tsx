@@ -1,9 +1,8 @@
 /**
  * Caregiver Join screen — step 2 of the caregiver onboarding path.
- * The caregiver enters the invite code (UUID) sent to their email.
  *
- * UI only — no service calls yet. The "Link My Account" button simply
- * navigates forward (functional wiring comes in the next phase).
+ * The caregiver enters the invite code (UUID) sent to their email.
+ * On submit, calls acceptCaregiverInvite to link their account to the row.
  */
 import React, { useState } from 'react';
 import {
@@ -15,42 +14,48 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAcceptCaregiverInvite } from '@/features/contacts';
+import { useAuth } from '@/features/auth/AuthContext';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function CaregiverJoinScreen() {
-  // userId will be wired up in phase 2 when we call acceptCaregiverInvite
+  const params = useLocalSearchParams<{ userId?: string }>();
+  const { user } = useAuth();
+  // Prefer route param (available right after sign-up, before session resolves);
+  // fall back to live session user.
+  const userId = params.userId ?? user?.id ?? '';
+
   const [token, setToken] = useState('');
-  const [pasting, setPasting] = useState(false);
+  const [error, setError] = useState('');
 
   const trimmedToken = token.trim();
   const canSubmit = trimmedToken.length === 36; // UUID length
 
-  // ── Paste helper ──────────────────────────────────────────────────────────
-  const handlePaste = async () => {
-    setPasting(true);
-    try {
-      const text = await Clipboard.getStringAsync();
-      if (text) setToken(text.trim());
-    } catch {
-      // Clipboard unavailable — do nothing
-    } finally {
-      setPasting(false);
-    }
-  };
+  const { mutate: acceptInvite, isPending } = useAcceptCaregiverInvite(userId);
 
-  // ── Submit (UI only — functional wiring in next phase) ────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleLink = () => {
-    if (!canSubmit) return;
-    // TODO: call acceptCaregiverInvite(trimmedToken, userId) in phase 2
-    // For now, navigate to the caregiver dashboard as a UI placeholder
-    router.replace('/(tabs)/caregiver-home');
+    if (!canSubmit || !userId) return;
+    setError('');
+    acceptInvite(trimmedToken, {
+      onSuccess: () => {
+        // Replace so pressing back doesn't return to this screen
+        router.replace('/(tabs)/caregiver-home');
+      },
+      onError: (err: unknown) => {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Could not link account. Please check your code and try again.',
+        );
+      },
+    });
   };
 
   return (
@@ -86,7 +91,7 @@ export default function CaregiverJoinScreen() {
           <Text style={styles.title}>Enter your invite code</Text>
           <Text style={styles.subtitle}>
             The person who invited you sent a unique code to your email address.
-            Paste or type it below to link your account.
+            Long-press the field to paste it, or type it below.
           </Text>
 
           {/* ── Input ─────────────────────────────────────────────────────────── */}
@@ -99,24 +104,16 @@ export default function CaregiverJoinScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-
-            {/* Paste from clipboard shortcut */}
-            <TouchableOpacity
-              style={styles.pasteBtn}
-              onPress={handlePaste}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Paste invite code from clipboard"
-            >
-              <Ionicons name="clipboard-outline" size={16} color={colors.brand[600]} />
-              <Text style={styles.pasteBtnText}>
-                {pasting ? 'Pasting…' : 'Paste from clipboard'}
+            <View style={styles.pasteHint}>
+              <Ionicons name="information-circle-outline" size={13} color={colors.grey[400]} />
+              <Text style={styles.pasteHintText}>
+                Long-press the field above to paste your code from clipboard.
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
 
           {/* ── Validation hint ───────────────────────────────────────────────── */}
-          {trimmedToken.length > 0 && trimmedToken.length !== 36 && (
+          {trimmedToken.length > 0 && !canSubmit && (
             <View style={styles.hintBanner}>
               <Ionicons name="information-circle-outline" size={16} color="#A87820" />
               <Text style={styles.hintText}>
@@ -125,11 +122,20 @@ export default function CaregiverJoinScreen() {
             </View>
           )}
 
+          {/* ── Error banner ──────────────────────────────────────────────────── */}
+          {error !== '' && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color="#CC0000" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
           {/* ── Link button ───────────────────────────────────────────────────── */}
           <Button
-            label="Link My Account"
+            label={isPending ? 'Linking…' : 'Link My Account'}
             onPress={handleLink}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isPending || !userId}
+            loading={isPending}
           />
 
           {/* ── Separator ─────────────────────────────────────────────────────── */}
@@ -226,23 +232,15 @@ const styles = StyleSheet.create({
 
   // Input group
   inputGroup: { gap: spacing[2] },
-  pasteBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    alignSelf: 'flex-start',
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    backgroundColor: colors.brand[50],
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.brand[200],
+  pasteHint: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
   },
-  pasteBtnText: {
-    fontSize: fontSizes.sm,
-    fontWeight: fontWeights.medium,
-    color: colors.brand[700],
+  pasteHintText: {
+    flex: 1, fontSize: fontSizes.xs, color: colors.grey[400],
+    lineHeight: fontSizes.xs * 1.5,
   },
 
-  // Hint
+  // Validation hint
   hintBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
     backgroundColor: '#FFFBEB',
@@ -251,6 +249,18 @@ const styles = StyleSheet.create({
   },
   hintText: {
     flex: 1, fontSize: fontSizes.sm, color: '#92400E',
+    lineHeight: fontSizes.sm * 1.5,
+  },
+
+  // Error banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
+    backgroundColor: '#FEF2F2',
+    borderRadius: radii.lg, borderWidth: 1, borderColor: '#FCA5A5',
+    padding: spacing[4],
+  },
+  errorText: {
+    flex: 1, fontSize: fontSizes.sm, color: '#CC0000',
     lineHeight: fontSizes.sm * 1.5,
   },
 

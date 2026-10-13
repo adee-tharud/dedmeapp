@@ -35,6 +35,7 @@ export interface Database {
           grace_period_hours?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       caregivers: {
         Row: {
@@ -79,6 +80,7 @@ export interface Database {
           accepted_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       check_ins: {
         Row: {
@@ -96,6 +98,7 @@ export interface Database {
           user_id?: string;
           checked_in_at?: string;
         };
+        Relationships: [];
       };
       messages: {
         Row: {
@@ -134,6 +137,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       escalation_events: {
         Row: {
@@ -148,7 +152,8 @@ export interface Database {
           stage: string;
           created_at?: string;
         };
-        Update: never; // append-only — no updates allowed
+        Update: Record<string, never>; // append-only — no updates allowed
+        Relationships: [];
       };
       push_tokens: {
         Row: {
@@ -167,7 +172,8 @@ export interface Database {
           created_at?: string;
         };
         /** Tokens are replaced (delete + insert), never mutated in place */
-        Update: never;
+        Update: Record<string, never>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

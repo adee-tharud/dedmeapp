@@ -65,3 +65,24 @@ export function timeUntilDue(
   if (hours > 0) return d(hours, 'hour');
   return `${minutes} min`;
 }
+
+/**
+ * Evaluates a monitored person's check-in status from their last check-in timestamp and frequency.
+ * - 'due': no check-in recorded yet, or check-in is due within the threshold window.
+ * - 'overdue': last check-in was overdue past the grace window.
+ * - 'ok': checked in recently within the frequency window.
+ */
+export function computeWatchStatus(
+  lastAt: string | null,
+  frequencyDays: number = 1,
+): 'ok' | 'due' | 'overdue' {
+  if (!lastAt) return 'due';
+  const freq = Math.max(1, frequencyDays);
+  const thresholdHours = freq * 24;
+  const diffHours = (Date.now() - new Date(lastAt).getTime()) / 36e5;
+  if (diffHours > thresholdHours + 2) return 'overdue';
+  if (diffHours > Math.max(0, thresholdHours - 4)) return 'due';
+  return 'ok';
+}
+
+

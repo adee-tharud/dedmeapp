@@ -19,15 +19,32 @@ import type { SignUpInput, SignInInput } from './auth.schema';
  * emailRedirectTo uses the app's custom URL scheme ("deadme://") so the
  * confirmation email link deep-links back into the app instead of localhost.
  */
-export async function signUp({ email, password }: SignUpInput) {
+export async function signUp({ name, email, password }: SignUpInput) {
+  const trimmedName = name.trim();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: 'deadme://auth/confirm',
+      data: {
+        name: trimmedName,
+      },
     },
   });
   if (error) throw error;
+
+  // Best-effort immediate write to profiles table if user is available
+  if (data?.user?.id) {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ name: trimmedName })
+        .eq('id', data.user.id);
+    } catch {
+      // Handled by handle_new_user database trigger fallback
+    }
+  }
+
   return data;
 }
 

@@ -8,6 +8,11 @@
 import { z } from 'zod';
 
 export const signUpSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Please enter your name')
+    .max(100, 'Name is too long'),
   email: z
     .string()
     .trim()

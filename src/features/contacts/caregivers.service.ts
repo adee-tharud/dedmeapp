@@ -1,13 +1,22 @@
 /**
- * Caregivers API — save and read caregiver rows.
+ * Caregivers API — save, read, and accept caregiver rows.
  *
  * Security Guide §5: all Supabase calls isolated here.
+ * Security Guide §6: query keys live in hooks file, not here.
+ *
+ * Functions:
+ *   saveCaregiver           — monitored person adds a caregiver by email
+ *   getCaregivers           — monitored person fetches their caregiver list
+ *   acceptCaregiverInvite   — caregiver redeems an invite_token to link account
+ *   getCaregiverWatch       — caregiver fetches people they are watching
  */
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 
 type CaregiverInsert = Database['public']['Tables']['caregivers']['Insert'];
 type CaregiverRow    = Database['public']['Tables']['caregivers']['Row'];
+
+// ── Shared types ──────────────────────────────────────────────────────────────
 
 export interface SaveCaregiverInput {
   userId: string;
@@ -16,6 +25,24 @@ export interface SaveCaregiverInput {
   phone?: string;
   relationship?: string;
 }
+
+/**
+ * Shape returned by getCaregiverWatch — a caregiver row joined with the
+ * latest check-in for the monitored person. The check-in fields are
+ * null if the monitored person has never checked in.
+ */
+export interface WatchedPersonRow {
+  /** The caregivers table row (full shape) */
+  caregiver: CaregiverRow;
+  /** ISO timestamp of the monitored person's last check-in, or null */
+  lastCheckInAt: string | null;
+  /** Name of the monitored person from their profile, or null */
+  monitoredPersonName: string | null;
+  /** Check-in frequency in days */
+  frequencyDays?: number;
+}
+
+// ── Monitored-person side ─────────────────────────────────────────────────────
 
 /**
  * Insert a new caregiver row for the given user.
@@ -33,7 +60,6 @@ export async function saveCaregiver(input: SaveCaregiverInput): Promise<Caregive
 
   const { data, error } = await supabase
     .from('caregivers')
-     
     .insert(row as any)
     .select()
     .single();
@@ -43,7 +69,9 @@ export async function saveCaregiver(input: SaveCaregiverInput): Promise<Caregive
 }
 
 /**
- * Fetch all caregivers belonging to the current user.
+ * Fetch all caregivers belonging to the current user (monitored person's view).
+ *
+ * RLS: "own caregivers" policy → user_id = auth.uid()
  */
 export async function getCaregivers(userId: string): Promise<CaregiverRow[]> {
   const { data, error } = await supabase
@@ -54,4 +82,143 @@ export async function getCaregivers(userId: string): Promise<CaregiverRow[]> {
 
   if (error) throw error;
   return data ?? [];
+}
+
+// ── Caregiver side ────────────────────────────────────────────────────────────
+
+/**
+ * Accept a caregiver invite by redeeming an invite_token.
+ *
+ * This links the signed-in user's account to the caregivers row by setting
+ * caregiver_user_id = userId and accepted_at = now(), and flipping status to
+ * 'accepted'.
+ *
+ * RLS: "accept invite by token" policy allows UPDATE when status = 'pending',
+ * and WITH CHECK enforces that caregiver_user_id is set to auth.uid() only.
+ *
+ * Throws if:
+ *   - The token does not exist (no matching row)
+ *   - The token is already accepted (status != 'pending')
+ *   - RLS blocks the update (shouldn't happen with the correct migration applied)
+ */
+export async function acceptCaregiverInvite(
+  token: string,
+  userId: string,
+): Promise<CaregiverRow> {
+  const cleanToken = token.trim();
+
+  // 1. Try secure RPC function first (bypasses RLS SELECT restriction)
+  try {
+    const { data: rpcData, error: rpcError } = await (supabase.rpc as any)(
+      'accept_caregiver_invite',
+      {
+        token_input: cleanToken,
+        caregiver_id: userId,
+      },
+    );
+
+    if (!rpcError && rpcData) {
+      return rpcData as CaregiverRow;
+    }
+
+    // If RPC returned a specific error other than missing function, throw it
+    if (
+      rpcError &&
+      rpcError.code !== '42883' &&
+      !rpcError.message.includes('function') &&
+      !rpcError.message.includes('not found in the schema')
+    ) {
+      throw new Error(
+        rpcError.message ||
+          'Invite code not found or already used. Please check your email and try again.',
+      );
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && !err.message.includes('function')) {
+      throw err;
+    }
+  }
+
+  // 2. Fallback to direct table UPDATE
+  const { data, error } = await supabase
+    .from('caregivers')
+    .update({
+      caregiver_user_id: userId,
+      accepted_at:       new Date().toISOString(),
+      status:            'accepted',
+    } as any)
+    .eq('invite_token', cleanToken)
+    .eq('status', 'pending')
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      throw new Error('Invite code not found or already used. Please check your email and try again.');
+    }
+    throw error;
+  }
+
+  return data as CaregiverRow;
+}
+
+/**
+ * Fetch all monitored people this user is a caregiver for.
+ *
+ * Returns a WatchedPersonRow[] with each caregiver row + the monitored
+ * person's latest check-in timestamp (two queries; simple and well-typed).
+ *
+ * RLS: "caregiver reads own link" policy → caregiver_user_id = auth.uid()
+ */
+export async function getCaregiverWatch(userId: string): Promise<WatchedPersonRow[]> {
+  // 1. Fetch all accepted caregiver rows for this caregiver
+  const { data: rows, error } = await supabase
+    .from('caregivers')
+    .select('*')
+    .eq('caregiver_user_id', userId)
+    .eq('status', 'accepted')
+    .order('accepted_at', { ascending: true });
+
+  if (error) throw error;
+  if (!rows || rows.length === 0) return [];
+
+  // 2. For each monitored person (user_id), fetch their latest check-in
+  const monitoredUserIds = rows.map(r => r.user_id);
+
+  const { data: checkIns, error: ciError } = await supabase
+    .from('check_ins')
+    .select('user_id, checked_in_at')
+    .in('user_id', monitoredUserIds)
+    .order('checked_in_at', { ascending: false });
+
+  if (ciError) throw ciError;
+
+  // Build a map: user_id → most recent check-in timestamp
+  const latestCheckIn = new Map<string, string>();
+  for (const ci of checkIns ?? []) {
+    if (!latestCheckIn.has(ci.user_id)) {
+      latestCheckIn.set(ci.user_id, ci.checked_in_at);
+    }
+  }
+
+  // 3. For each monitored person, fetch their profile name and frequency
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, name, check_in_frequency_days')
+    .in('id', monitoredUserIds);
+
+  const profileMap = new Map<string, { name: string | null; frequencyDays: number }>();
+  for (const p of profiles ?? []) {
+    profileMap.set(p.id, {
+      name: p.name ?? null,
+      frequencyDays: p.check_in_frequency_days ?? 1,
+    });
+  }
+
+  return (rows as CaregiverRow[]).map(caregiver => ({
+    caregiver,
+    lastCheckInAt: latestCheckIn.get(caregiver.user_id) ?? null,
+    monitoredPersonName: profileMap.get(caregiver.user_id)?.name ?? null,
+    frequencyDays: profileMap.get(caregiver.user_id)?.frequencyDays ?? 1,
+  }));
 }

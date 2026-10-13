@@ -2,6 +2,8 @@ import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontWeights, spacing } from '../../theme/tokens';
+import { useAuth } from '../../features/auth/AuthContext';
+import { useCaregivers, useCaregiverWatch } from '../../features/contacts';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -80,10 +82,27 @@ const tabStyles = StyleSheet.create({
 });
 
 export default function TabsLayout() {
-  // TODO phase 2: query the DB to determine which tabs to show based on role.
-  // For now all tabs are visible for UI review purposes.
-  // isMember = user has rows where user_id = me
-  // isCaregiver = user has rows where caregiver_user_id = me
+  const { user } = useAuth();
+  const userId = user?.id ?? '';
+
+  // Derive role from DB — runs reactively after sign-in.
+  // We fetch both lists; each is small and fast.
+  const { data: caregivers  } = useCaregivers(userId);    // monitored-person view
+  const { data: watchedList } = useCaregiverWatch(userId); // caregiver view
+
+  // Roles are derived reactively after sign-in.
+  // - isCaregiver: true if user is watching over 1 or more people.
+  // - isMember: true if user has caregivers, OR if they are not exclusively a caregiver
+  //   (ensures brand-new signups who haven't added caregivers yet still see Home and Messages).
+  const hasCaregivers = (caregivers?.length ?? 0) > 0;
+  const hasWatched    = (watchedList?.length ?? 0) > 0;
+
+  const isCaregiver = hasWatched;
+  const isMember    = hasCaregivers || !hasWatched;
+
+  // Helper: hide a tab without removing its route from the stack.
+  // tabBarItemStyle: { display: 'none' } is the Expo Router-safe way to do this.
+  const hidden = { tabBarItemStyle: { display: 'none' as const } };
 
   return (
     <Tabs
@@ -104,6 +123,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          ...(!isMember ? hidden : {}),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               name="home-outline"
@@ -119,6 +139,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="caregiver-home"
         options={{
+          ...(!isCaregiver ? hidden : {}),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               name="eye-outline"
@@ -134,6 +155,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="messages"
         options={{
+          ...(!isMember ? hidden : {}),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               name="heart-circle-outline"
