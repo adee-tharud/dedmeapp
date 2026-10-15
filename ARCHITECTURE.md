@@ -93,7 +93,7 @@ Do not implement this now. The codebase needs **zero cleanup** as a result of th
 | **Escalation logic** (Stage 1 → 2 → 3) | `escalation_events` table exists but nothing writes to it |
 | **Caregiver alert push notification** | Nothing sends to `push_tokens` of the caregiver |
 | **Message delivery** to caregivers/contacts | `messages` table exists, no send logic triggers |
-| **Supabase Edge Function** for any of the above | No `supabase/functions/` directory exists yet |
+| **Supabase Edge Function for escalation** | Not yet built (`supabase/functions/send-caregiver-invite` exists for invites) |
 
 ### Intended escalation flow (to be built)
 ```
@@ -110,7 +110,15 @@ Missed check-in deadline
 
 ---
 
-## Authentication & OTP Verification Flow
+## Authentication, 30-Day Sessions & OTP Verification Flow
+
+### 30-Day Session Persistence & Auto-Login
+- Sessions are persisted via `expo-secure-store` using `deadme_session_created_at`.
+- Max session lifetime is 30 days (`30 * 24 * 60 * 60 * 1000` ms).
+- On app launch, `src/app/_layout.tsx` locks the native splash screen with `expo-splash-screen` while hydrating auth.
+- If a valid session exists (< 30 days old), returning users are auto-redirected to `/(tabs)` without re-entering credentials.
+- `AppState` listener re-evaluates session age when resuming from background; expired sessions (> 30 days) automatically sign out.
+- Explicit sign-out clears the SecureStore timestamp, Supabase session, and React Query cache.
 
 ### New User Sign-Up
 1. User enters name, email, and password on `src/app/(auth)/index.tsx`.
@@ -133,17 +141,22 @@ Missed check-in deadline
 | `src/app/(auth)/index.tsx` | Sign-up screen (name, email, password) |
 | `src/app/(auth)/sign-in.tsx` | Sign-in screen (email, password) |
 | `src/features/auth/auth.service.ts` | All Supabase Auth operations (`signUp`, `signIn`, `verifyOtp`, `resendOtp`) |
+| `src/features/auth/session.service.ts` | 30-day session tracking in SecureStore (`recordSessionStart`, `isSessionExpired`, `clearSessionMetadata`) |
+| `src/features/auth/AuthContext.tsx` | Single auth listener, session hydration, and `AppState` background resume expiry checks |
 | `src/app/(tabs)/_layout.tsx` | Role derivation + tab visibility logic |
 | `src/app/(tabs)/index.tsx` | Monitored person home / check-in button |
 | `src/app/(tabs)/caregiver-home.tsx` | Caregiver dashboard (watched persons) |
-| `src/app/(tabs)/contacts.tsx` | Monitored person's caregiver list |
+| `src/app/(tabs)/contacts.tsx` | Monitored person's caregiver list + "Resend invite" button |
 | `src/app/(onboarding)/role-select.tsx` | Post-verification role selection |
 | `src/app/(onboarding)/caregiver-join.tsx` | Token redemption screen |
-| `src/features/contacts/caregivers.service.ts` | All `caregivers` table queries + invite acceptance |
+| `src/features/contacts/caregivers.service.ts` | All `caregivers` table queries, invite acceptance, and `sendCaregiverInvite()` |
+| `src/features/contacts/caregivers.hooks.ts` | Caregiver queries, mutations, and `useResendCaregiverInvite()` |
 | `src/features/checkin/checkin.service.ts` | Check-in insert + helpers |
 | `src/features/notifications/notifications.service.ts` | Push token register/unregister |
-| `supabase/migrations/20261013000000_accept_invite_policy.sql` | RLS fix for first-time token acceptance |
+| `supabase/functions/send-caregiver-invite/index.ts` | Edge Function dispatching invite emails via Resend with rate limiting & JWT verification |
 | `supabase/migrations/20261013143000_accept_invite_rpc.sql` | SECURITY DEFINER RPC for token acceptance |
+| `supabase/migrations/20261015100000_caregiver_invite_expiry_and_rate_limit.sql` | 72h invite token expiration, rate-limit timestamp, and RPC checks |
+| `supabase/migrations/20261015110000_fix_caregiver_invite_security.sql` | Drops dangerous table-level UPDATE policy and hardens RPC auth checks |
 | `DB.md` | Living schema reference (tables + RLS policies) |
 | `Supabase_Security_and_Coding_Standards_Guide.md` | Project security standards |
 

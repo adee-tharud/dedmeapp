@@ -110,7 +110,6 @@
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `accept invite by token` | UPDATE | public | PERMISSIVE | `(status = 'pending'::text)` | `(auth.uid() = caregiver_user_id)` |
 | `caregiver accepts invite` | UPDATE | public | PERMISSIVE | `(auth.uid() = caregiver_user_id)` | `(auth.uid() = caregiver_user_id)` |
 | `caregiver reads own link` | SELECT | public | PERMISSIVE | `(auth.uid() = caregiver_user_id)` | — |
 | `insert own caregivers` | INSERT | public | PERMISSIVE | — | `(auth.uid() = user_id)` |
