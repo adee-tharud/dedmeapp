@@ -14,7 +14,7 @@ import { StepIndicator } from '@/components/ui/StepIndicator';
 import { Button } from '@/components/ui/Button';
 import { useDraftStore, useCreateMessage } from '@/features/messages';
 import { useAuth } from '@/features/auth/AuthContext';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 
 function ReviewRow({
   sectionLabel,
@@ -141,7 +141,7 @@ export default function Step4Screen() {
         {/* ── Error banner ──────────────────────────────────────────────────  */}
         {createMessage.isError ? (
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color="#CC0000" />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.surface.dangerText} />
             <Text style={styles.errorText}>Could not save your message. Please try again.</Text>
           </View>
         ) : null}
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 40, height: 40, borderRadius: radii.full,
     backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...shadows.subtle,
   },
   headerTitle: { fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.brand[900] },
   stepRow: { alignItems: 'center', paddingBottom: spacing[4] },
@@ -215,10 +215,10 @@ const styles = StyleSheet.create({
   activateBtnDisabled: { opacity: 0.45 },
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    backgroundColor: '#FFF0F0', borderRadius: radii.lg,
-    padding: spacing[3], borderWidth: 1, borderColor: '#FFCCCC',
+    backgroundColor: colors.surface.dangerSubtle, borderRadius: radii.lg,
+    padding: spacing[3], borderWidth: 1, borderColor: colors.surface.dangerBorderSubtle,
   },
-  errorText: { flex: 1, color: '#CC0000', fontSize: fontSizes.sm },
+  errorText: { flex: 1, color: colors.surface.dangerText, fontSize: fontSizes.sm },
   savingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing[3], paddingVertical: spacing[4],

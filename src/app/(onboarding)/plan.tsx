@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Button } from '../../components/ui/Button';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../theme/tokens';
 
 
 const PLANS = [
@@ -171,11 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.subtle,
   },
   backArrow: { fontSize: fontSizes.lg, color: colors.brand[900], marginTop: -1 },
   headerTitle: { fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.brand[900] },

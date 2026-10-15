@@ -131,8 +131,8 @@ if (typeof globalThis !== 'undefined' && !globalThis.crypto?.getRandomValues) {
   (globalThis as unknown as { crypto: unknown }).crypto = {
     getRandomValues: <T extends ArrayBufferView | null>(array: T): T => {
       if (!array) return array;
-      const bytes = Crypto.getRandomValues(new Uint8Array(array.byteLength));
-      new Uint8Array(array.buffer, array.byteOffset, array.byteLength).set(bytes);
+      const target = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+      Crypto.getRandomValues(target);
       return array;
     },
   };

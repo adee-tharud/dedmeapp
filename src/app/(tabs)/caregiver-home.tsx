@@ -11,7 +11,7 @@
  * UI only — data is mocked for now. Functional wiring (useCaregiverWatch hook)
  * comes in the next phase.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,11 +27,11 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { avatarInitial, computeWatchStatus, timeUntilDue } from '@/utils';
-import { useAuth } from '@/features/auth/AuthContext';
+import { useAuth, setLastUserRole } from '@/features/auth';
 import { useCaregiverWatch, useAcceptCaregiverInvite } from '@/features/contacts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -55,17 +55,17 @@ const STATUS_CONFIG: Record<
   CheckInStatus,
   { bg: string; text: string; icon: string; label: string }
 > = {
-  ok:      { bg: '#E6F9EE', text: '#1A8A47', icon: '✓', label: 'Checked in' },
-  due:     { bg: '#FFF7E0', text: '#A87820', icon: '◷', label: 'Check-in due' },
-  overdue: { bg: '#FEF2F2', text: '#CC0000', icon: '⚠', label: 'Overdue' },
+  ok:      { bg: colors.surface.success, text: colors.surface.successDark, icon: '✓', label: 'Checked in' },
+  due:     { bg: colors.surface.warningSubtle, text: colors.surface.warningDark, icon: '◷', label: 'Check-in due' },
+  overdue: { bg: colors.surface.danger, text: colors.surface.dangerText, icon: '⚠', label: 'Overdue' },
 };
 
 function avatarColors(index: number) {
   const palette = [
-    { bg: colors.brand[100], text: colors.brand[700] },
-    { bg: '#FFF0E0', text: '#C07830' },
-    { bg: '#F0E8FF', text: '#7B2FBE' },
-    { bg: '#E0F7FA', text: '#00838F' },
+    colors.avatar.blue,
+    colors.avatar.orange,
+    colors.avatar.purple,
+    colors.avatar.teal,
   ];
   return palette[index % palette.length];
 }
@@ -139,7 +139,7 @@ function AddInviteSheet({
           {/* Header row */}
           <View style={styles.sheetHeader}>
             <View style={styles.sheetIconWrap}>
-              <Ionicons name="key-outline" size={22} color="#00838F" />
+              <Ionicons name="key-outline" size={22} color={colors.caregiver[700]} />
             </View>
             <View style={styles.sheetHeaderText}>
               <Text style={styles.sheetTitle}>Add a person to watch</Text>
@@ -173,7 +173,7 @@ function AddInviteSheet({
             {/* Validation hint */}
             {trimmedToken.length > 0 && !canSubmit && (
               <View style={styles.hintBanner}>
-                <Ionicons name="information-circle-outline" size={15} color="#A87820" />
+                <Ionicons name="information-circle-outline" size={15} color={colors.surface.warningDark} />
                 <Text style={styles.hintText}>
                   Code should be 36 characters. Check your email and try again.
                 </Text>
@@ -191,7 +191,7 @@ function AddInviteSheet({
             {/* Error banner */}
             {submitError !== '' && (
               <View style={styles.sheetErrorBanner}>
-                <Ionicons name="alert-circle-outline" size={15} color="#CC0000" />
+                <Ionicons name="alert-circle-outline" size={15} color={colors.surface.dangerText} />
                 <Text style={styles.sheetErrorText}>{submitError}</Text>
               </View>
             )}
@@ -271,6 +271,10 @@ export default function CaregiverHomeScreen() {
   const [refreshing, setRefreshing]     = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetError, setSheetError]     = useState('');
+
+  useEffect(() => {
+    setLastUserRole('caregiver');
+  }, []);
 
   // Map WatchedPersonRow → WatchedPerson (UI shape)
   const watched: WatchedPerson[] = (watchedList ?? []).map(row => {
@@ -370,7 +374,7 @@ export default function CaregiverHomeScreen() {
         {/* Overdue banner */}
         {overdueCount > 0 && (
           <View style={styles.urgentBanner}>
-            <Ionicons name="warning-outline" size={20} color="#CC0000" />
+            <Ionicons name="warning-outline" size={20} color={colors.surface.dangerText} />
             <Text style={styles.urgentText}>
               {overdueCount === 1
                 ? '1 person has missed their check-in.'
@@ -382,7 +386,7 @@ export default function CaregiverHomeScreen() {
         {/* Due banner */}
         {dueCount > 0 && overdueCount === 0 && (
           <View style={styles.dueBanner}>
-            <Ionicons name="time-outline" size={18} color="#A87820" />
+            <Ionicons name="time-outline" size={18} color={colors.surface.warningDark} />
             <Text style={styles.dueText}>
               {dueCount === 1
                 ? '1 person has a check-in due.'
@@ -480,7 +484,7 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: fontSizes.xs,
     fontWeight: fontWeights.bold,
-    color: '#00838F',
+    color: colors.caregiver[700],
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -498,7 +502,7 @@ const styles = StyleSheet.create({
   },
   alertBadge: {
     minWidth: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#CC0000',
+    backgroundColor: colors.surface.dangerText,
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: spacing[2],
   },
@@ -508,11 +512,9 @@ const styles = StyleSheet.create({
   addBtn: {
     width: 44, height: 44,
     borderRadius: radii.full,
-    backgroundColor: '#00838F',
+    backgroundColor: colors.caregiver[700],
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#005F6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28, shadowRadius: 10, elevation: 6,
+    ...shadows.caregiver,
   },
 
   // Scroll
@@ -525,16 +527,16 @@ const styles = StyleSheet.create({
   // Banners
   urgentBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: '#FEF2F2', borderRadius: radii.lg,
-    borderWidth: 1, borderColor: '#FCA5A5', padding: spacing[4],
+    backgroundColor: colors.surface.danger, borderRadius: radii.lg,
+    borderWidth: 1, borderColor: colors.surface.dangerBorder, padding: spacing[4],
   },
-  urgentText: { flex: 1, fontSize: fontSizes.sm, fontWeight: fontWeights.bold, color: '#CC0000' },
+  urgentText: { flex: 1, fontSize: fontSizes.sm, fontWeight: fontWeights.bold, color: colors.surface.dangerText },
   dueBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: '#FFFBEB', borderRadius: radii.lg,
-    borderWidth: 1, borderColor: '#FDE68A', padding: spacing[4],
+    backgroundColor: colors.surface.warning, borderRadius: radii.lg,
+    borderWidth: 1, borderColor: colors.surface.warningBorder, padding: spacing[4],
   },
-  dueText: { flex: 1, fontSize: fontSizes.sm, fontWeight: fontWeights.medium, color: '#92400E' },
+  dueText: { flex: 1, fontSize: fontSizes.sm, fontWeight: fontWeights.medium, color: colors.surface.warningText },
 
   // Empty state
   emptyState: { alignItems: 'center', gap: spacing[4], paddingVertical: spacing[8] },
@@ -547,15 +549,13 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: fontSizes.md * 1.5,
     paddingHorizontal: spacing[4],
   },
-  emptyInlineBtn: { fontWeight: fontWeights.extrabold, color: '#00838F' },
+  emptyInlineBtn: { fontWeight: fontWeights.extrabold, color: colors.caregiver[700] },
   emptyAddBtn: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    backgroundColor: '#00838F', borderRadius: radii.full,
+    backgroundColor: colors.caregiver[700], borderRadius: radii.full,
     paddingHorizontal: spacing[6], paddingVertical: spacing[4],
     marginTop: spacing[2],
-    shadowColor: '#005F6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25, shadowRadius: 10, elevation: 5,
+    ...shadows.caregiver,
   },
   emptyAddBtnText: {
     fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.white,
@@ -566,8 +566,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[4],
     backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing[5],
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    ...shadows.card,
   },
   avatar: {
     width: 54, height: 54, borderRadius: radii.lg,
@@ -591,11 +590,11 @@ const styles = StyleSheet.create({
   },
   addAnotherIcon: {
     width: 54, height: 54, borderRadius: radii.lg,
-    backgroundColor: '#E0F7FA',
+    backgroundColor: colors.caregiver[50],
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   addAnotherText: {
-    flex: 1, fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: '#00838F',
+    flex: 1, fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.caregiver[700],
   },
 
   // Info note
@@ -612,7 +611,7 @@ const styles = StyleSheet.create({
   // ── Bottom sheet ─────────────────────────────────────────────────────────────
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   sheetKav: {
     flex: 1, justifyContent: 'flex-end',
@@ -622,7 +621,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: spacing[3],
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1, shadowRadius: 20, elevation: 20,
   },
@@ -639,7 +638,7 @@ const styles = StyleSheet.create({
   },
   sheetIconWrap: {
     width: 44, height: 44, borderRadius: radii.lg,
-    backgroundColor: '#E0F7FA',
+    backgroundColor: colors.caregiver[50],
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   sheetHeaderText: { flex: 1, gap: 3 },
@@ -666,22 +665,22 @@ const styles = StyleSheet.create({
   // Sheet error banner
   sheetErrorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    backgroundColor: '#FEF2F2', borderRadius: radii.md,
-    borderWidth: 1, borderColor: '#FCA5A5', padding: spacing[3],
+    backgroundColor: colors.surface.danger, borderRadius: radii.md,
+    borderWidth: 1, borderColor: colors.surface.dangerBorder, padding: spacing[3],
   },
   sheetErrorText: {
-    flex: 1, fontSize: fontSizes.xs, color: '#CC0000',
+    flex: 1, fontSize: fontSizes.xs, color: colors.surface.dangerText,
     lineHeight: fontSizes.xs * 1.4,
   },
 
   // Hint banner
   hintBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
-    backgroundColor: '#FFFBEB', borderRadius: radii.lg,
-    borderWidth: 1, borderColor: '#FDE68A', padding: spacing[3],
+    backgroundColor: colors.surface.warning, borderRadius: radii.lg,
+    borderWidth: 1, borderColor: colors.surface.warningBorder, padding: spacing[3],
   },
   hintText: {
-    flex: 1, fontSize: fontSizes.sm, color: '#92400E', lineHeight: fontSizes.sm * 1.4,
+    flex: 1, fontSize: fontSizes.sm, color: colors.surface.warningText, lineHeight: fontSizes.sm * 1.4,
   },
 
   // Sheet info note

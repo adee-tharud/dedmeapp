@@ -11,6 +11,10 @@ export {
   getSessionStartTime,
   isSessionExpired,
   clearSessionMetadata,
+  setHasRegistered,
+  getHasRegistered,
+  setLastUserRole,
+  getLastUserRole,
   ONE_MONTH_MS,
 } from './session.service';
 

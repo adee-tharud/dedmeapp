@@ -20,7 +20,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useMessages } from '@/features/messages';
 import type { DecryptedMessage } from '@/features/messages';
@@ -32,18 +32,18 @@ const STATUS_STYLES: Record<
   'draft' | 'active' | 'sent',
   { bg: string; text: string; label: string }
 > = {
-  active: { bg: '#E6F9EE', text: '#1A8A47', label: 'ACTIVE' },
-  draft:  { bg: colors.grey[100], text: colors.grey[500], label: 'DRAFT' },
-  sent:   { bg: '#E8F0FE', text: '#1A56DB', label: 'SENT' },
+  active: { bg: colors.surface.success, text: colors.surface.successDark, label: 'ACTIVE' },
+  draft:  { bg: colors.surface.draft, text: colors.surface.draftText, label: 'DRAFT' },
+  sent:   { bg: colors.surface.info, text: colors.surface.infoText, label: 'SENT' },
 };
 
 function avatarColors(index: number): { bg: string; text: string } {
   const palette = [
-    { bg: colors.brand[100], text: colors.brand[700] },
-    { bg: '#FFF0E0', text: '#C07830' },
-    { bg: '#F0E8FF', text: '#7B2FBE' },
-    { bg: '#E0F7FA', text: '#00838F' },
-    { bg: '#FBE9E7', text: '#BF360C' },
+    colors.avatar.blue,
+    colors.avatar.orange,
+    colors.avatar.purple,
+    colors.avatar.teal,
+    colors.avatar.coral,
   ];
   return palette[index % palette.length];
 }
@@ -92,7 +92,7 @@ export default function MessagesScreen() {
         {/* ── Error ────────────────────────────────────────────────────────── */}
         {isError && (
           <TouchableOpacity style={styles.errorBanner} onPress={() => refetch()}>
-            <Ionicons name="alert-circle-outline" size={18} color="#CC0000" />
+            <Ionicons name="alert-circle-outline" size={18} color={colors.surface.dangerText} />
             <Text style={styles.errorText}>Could not load messages. Tap to retry.</Text>
           </TouchableOpacity>
         )}
@@ -239,10 +239,10 @@ const styles = StyleSheet.create({
   centerStateText: { fontSize: fontSizes.sm, color: colors.grey[400] },
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    backgroundColor: '#FFF0F0', borderRadius: radii.lg,
-    padding: spacing[4], borderWidth: 1, borderColor: '#FFCCCC',
+    backgroundColor: colors.surface.dangerSubtle, borderRadius: radii.lg,
+    padding: spacing[4], borderWidth: 1, borderColor: colors.surface.dangerBorderSubtle,
   },
-  errorText: { flex: 1, color: '#CC0000', fontSize: fontSizes.sm },
+  errorText: { flex: 1, color: colors.surface.dangerText, fontSize: fontSizes.sm },
 
   // Empty state
   emptyState: {
@@ -275,8 +275,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[4],
     backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing[5],
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    ...shadows.card,
   },
   avatar: {
     width: 52, height: 52, borderRadius: radii.lg,
@@ -304,8 +303,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: spacing[1],
     backgroundColor: colors.white, borderRadius: radii.xl,
     paddingHorizontal: spacing[4], paddingVertical: spacing[3],
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    ...shadows.subtle,
   },
   ctaBtnText: { fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.brand[800] },
 

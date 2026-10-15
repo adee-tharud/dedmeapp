@@ -5,10 +5,39 @@
  * Security Guide §6: namespaced React Query keys for precise invalidation.
  * Security Guide §8: idempotency — one check-in per day max.
  */
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 
 type CheckInRow = Database['public']['Tables']['check_ins']['Row'];
+
+const CHECKIN_CACHE_PREFIX = 'deadme_last_checkin_';
+
+/**
+ * Persists the latest check-in timestamp in SecureStore so the app can hydrate
+ * the check-in state synchronously on app launch before the network query completes.
+ */
+export async function saveCachedCheckIn(userId: string, timestamp: string): Promise<void> {
+  if (!userId || !timestamp) return;
+  try {
+    await SecureStore.setItemAsync(`${CHECKIN_CACHE_PREFIX}${userId}`, timestamp);
+  } catch (err) {
+    console.warn('[CheckInService] Failed to cache check-in timestamp:', err);
+  }
+}
+
+/**
+ * Reads the locally cached check-in timestamp for the user.
+ */
+export async function getCachedCheckIn(userId: string): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    return await SecureStore.getItemAsync(`${CHECKIN_CACHE_PREFIX}${userId}`);
+  } catch (err) {
+    console.warn('[CheckInService] Failed to read cached check-in timestamp:', err);
+    return null;
+  }
+}
 
 // ── Query key namespace ────────────────────────────────────────────────────────
 // §6: namespace per feature so invalidation is precise.
@@ -35,6 +64,9 @@ export async function fetchLatestCheckIn(userId: string): Promise<CheckInRow | n
     .maybeSingle();
 
   if (error) throw error;
+  if (data?.checked_in_at) {
+    await saveCachedCheckIn(userId, data.checked_in_at);
+  }
   return data;
 }
 
@@ -63,7 +95,12 @@ export async function recordCheckIn(userId: string): Promise<CheckInRow> {
     .maybeSingle();
 
   if (existingError) throw existingError;
-  if (existing) return existing; // already checked in today — return existing row
+  if (existing) {
+    if (existing.checked_in_at) {
+      await saveCachedCheckIn(userId, existing.checked_in_at);
+    }
+    return existing; // already checked in today — return existing row
+  }
 
   // Insert a new check-in
   const { data, error } = await supabase
@@ -73,6 +110,9 @@ export async function recordCheckIn(userId: string): Promise<CheckInRow> {
     .single();
 
   if (error) throw error;
+  if (data?.checked_in_at) {
+    await saveCachedCheckIn(userId, data.checked_in_at);
+  }
   return data as CheckInRow;
 }
 

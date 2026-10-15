@@ -15,7 +15,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -128,7 +128,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: () => {
             signOutMutation.mutate(undefined, {
-              onSuccess: () => router.replace('/(auth)/'),
+              onSuccess: () => router.replace('/(auth)/sign-in'),
               onError: () =>
                 Alert.alert('Error', 'Could not log out. Please try again.'),
             });
@@ -219,8 +219,8 @@ export default function SettingsScreen() {
             {
               type: 'toggle',
               icon: 'notifications-outline',
-              iconColor: '#9B6DFF',
-              iconBg: '#F0EBFF',
+              iconColor: colors.avatar.violet.text,
+              iconBg: colors.avatar.violet.bg,
               label: 'Push notifications',
               sublabel: 'Check-in reminders & alerts',
               value: pushEnabled,
@@ -229,8 +229,8 @@ export default function SettingsScreen() {
             {
               type: 'toggle',
               icon: 'mail-outline',
-              iconColor: '#3B82F6',
-              iconBg: '#EFF6FF',
+              iconColor: colors.info,
+              iconBg: colors.surface.infoLight,
               label: 'Email notifications',
               sublabel: 'Backup when push is unavailable',
               value: emailEnabled,
@@ -246,8 +246,8 @@ export default function SettingsScreen() {
             {
               type: 'toggle',
               icon: 'finger-print-outline',
-              iconColor: '#22C55E',
-              iconBg: '#F0FDF4',
+              iconColor: colors.success,
+              iconBg: colors.avatar.green.bg,
               label: 'Face ID / Biometrics',
               sublabel: 'Lock app on background',
               value: biometricEnabled,
@@ -256,8 +256,8 @@ export default function SettingsScreen() {
             {
               type: 'link',
               icon: 'lock-closed-outline',
-              iconColor: '#F59E0B',
-              iconBg: '#FFFBEB',
+              iconColor: colors.warning,
+              iconBg: colors.surface.warning,
               label: 'Privacy and security',
               onPress: () => {},
             },
@@ -316,7 +316,7 @@ export default function SettingsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Log out"
             >
-              <View style={[styles.rowIcon, { backgroundColor: '#FFF0F0' }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.surface.dangerSubtle }]}>
                 {signOutMutation.isPending ? (
                   <ActivityIndicator size="small" color={colors.danger} />
                 ) : (
@@ -338,7 +338,7 @@ export default function SettingsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Delete account"
             >
-              <View style={[styles.rowIcon, { backgroundColor: '#FFF0F0' }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.surface.dangerSubtle }]}>
                 <Ionicons name="trash-outline" size={18} color={colors.danger} />
               </View>
               <View style={styles.rowContent}>
@@ -425,11 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radii.xl,
     padding: spacing[5],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   avatar: {
     width: 52,
@@ -480,11 +476,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radii.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
 
   // Row
@@ -530,7 +522,7 @@ const styles = StyleSheet.create({
   // Edit Name Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     padding: spacing[5],
   },
@@ -539,7 +531,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     padding: spacing[5],
     gap: spacing[4],
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,

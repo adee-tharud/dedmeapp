@@ -32,7 +32,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StepIndicator } from '../../components/ui/StepIndicator';
 import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../theme/tokens';
-import { verifyOtp, resendOtp } from '@/features/auth';
+import { verifyOtp, resendOtp, setHasRegistered } from '@/features/auth';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -118,6 +118,7 @@ export default function VerifyOtpScreen() {
         });
 
         // Verification successful! Supabase session is now established.
+        await setHasRegistered(true);
         // Navigate forward into onboarding.
         router.replace({
           pathname: '/(onboarding)/role-select',
@@ -499,9 +500,9 @@ const styles = StyleSheet.create({
 
   // Banners
   errorBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.surface.danger,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: colors.surface.dangerBorder,
     borderRadius: radii.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],

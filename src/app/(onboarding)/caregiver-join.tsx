@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAcceptCaregiverInvite } from '@/features/contacts';
 import { useAuth } from '@/features/auth/AuthContext';
 
@@ -83,7 +83,7 @@ export default function CaregiverJoinScreen() {
         >
           {/* ── Icon ──────────────────────────────────────────────────────────── */}
           <View style={styles.iconWrap}>
-            <Ionicons name="mail-open-outline" size={32} color="#00838F" />
+            <Ionicons name="mail-open-outline" size={32} color={colors.caregiver[700]} />
           </View>
 
           {/* ── Title ─────────────────────────────────────────────────────────── */}
@@ -114,7 +114,7 @@ export default function CaregiverJoinScreen() {
           {/* ── Validation hint ───────────────────────────────────────────────── */}
           {trimmedToken.length > 0 && !canSubmit && (
             <View style={styles.hintBanner}>
-              <Ionicons name="information-circle-outline" size={16} color="#A87820" />
+              <Ionicons name="information-circle-outline" size={16} color={colors.surface.warningDark} />
               <Text style={styles.hintText}>
                 The code should be 36 characters. Check your email and try again.
               </Text>
@@ -124,7 +124,7 @@ export default function CaregiverJoinScreen() {
           {/* ── Error banner ──────────────────────────────────────────────────── */}
           {error !== '' && (
             <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle-outline" size={16} color="#CC0000" />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.surface.dangerText} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -187,9 +187,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.white,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...shadows.subtle,
   },
   headerTitle: {
     fontSize: fontSizes.md,
@@ -209,7 +207,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 68, height: 68,
     borderRadius: radii.full,
-    backgroundColor: '#E0F7FA',
+    backgroundColor: colors.caregiver[50],
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'flex-start',
   },
@@ -242,24 +240,24 @@ const styles = StyleSheet.create({
   // Validation hint
   hintBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
-    backgroundColor: '#FFFBEB',
-    borderRadius: radii.lg, borderWidth: 1, borderColor: '#FDE68A',
+    backgroundColor: colors.surface.warning,
+    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.surface.warningBorder,
     padding: spacing[4],
   },
   hintText: {
-    flex: 1, fontSize: fontSizes.sm, color: '#92400E',
+    flex: 1, fontSize: fontSizes.sm, color: colors.surface.warningText,
     lineHeight: fontSizes.sm * 1.5,
   },
 
   // Error banner
   errorBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2],
-    backgroundColor: '#FEF2F2',
-    borderRadius: radii.lg, borderWidth: 1, borderColor: '#FCA5A5',
+    backgroundColor: colors.surface.danger,
+    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.surface.dangerBorder,
     padding: spacing[4],
   },
   errorText: {
-    flex: 1, fontSize: fontSizes.sm, color: '#CC0000',
+    flex: 1, fontSize: fontSizes.sm, color: colors.surface.dangerText,
     lineHeight: fontSizes.sm * 1.5,
   },
 

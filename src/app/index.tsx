@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
 import characterAnimation from '../../assets/character.lottie';
 import { colors, fontSizes, fontWeights, radii, spacing } from '../theme/tokens';
+import { useAuth } from '@/features/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -94,6 +95,8 @@ function Sparkle({
 
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
 export default function WelcomeScreen() {
+  const { session, isLoading, hasRegistered } = useAuth();
+
   // Entry animation values — useState lazy initialisers ensure a single
   // Animated.Value instance per mount (satisfies react-hooks/refs rule).
   const [mascotY]       = useState(() => new Animated.Value(-30));
@@ -134,6 +137,12 @@ export default function WelcomeScreen() {
   const handleGetStarted = () => {
     router.push('/(auth)/');
   };
+
+  // If auth is loading, session is active, or user is already registered and being
+  // routed to Sign-In, render the neutral sky background without any welcome flash.
+  if (isLoading || session || hasRegistered) {
+    return <View style={styles.safe} />;
+  }
 
   return (
     <SafeAreaView style={styles.safe}>

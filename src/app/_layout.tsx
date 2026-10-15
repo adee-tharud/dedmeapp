@@ -23,7 +23,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 /** Inner component that can use the auth context provided above it. */
 function RootNavigator() {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, hasRegistered, userRole } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -34,20 +34,29 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return; // Still hydrating session from SecureStore — keep splash screen visible
 
-    const inProtectedRoute = segments[0] === '(tabs)';
+    const inProtectedRoute = segments[0] === '(tabs)' || segments[0] === 'message';
     const inWelcomeRoute = !segments[0] || segments[0] === 'index';
+    const inAuthRoute = segments[0] === '(auth)';
 
     if (!session && inProtectedRoute) {
       // Signed-out or expired session user trying to access protected route → send to auth
-      router.replace('/(auth)/');
-    } else if (session && inWelcomeRoute) {
+      router.replace(hasRegistered ? '/(auth)/sign-in' : '/(auth)/');
+    } else if (session && (inWelcomeRoute || inAuthRoute)) {
       // Returning authenticated user with valid 30-day session → auto-route to main app tabs
-      router.replace('/(tabs)');
+      const target = userRole === 'caregiver' ? '/(tabs)/caregiver-home' : '/(tabs)';
+      router.replace(target);
+    } else if (!session && inWelcomeRoute && hasRegistered) {
+      // Already registered user returning signed out → bypass welcome, go directly to sign-in
+      router.replace('/(auth)/sign-in');
     }
 
-    // Dismiss the splash screen now that initial route determination is done
-    SplashScreen.hideAsync().catch(() => {});
-  }, [session, isLoading, segments, router]);
+    // Dismiss the splash screen after the destination route has mounted and rendered
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [session, isLoading, hasRegistered, userRole, segments, router]);
 
   return (
     <>
@@ -63,6 +72,8 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="message/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="message/new" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </>
   );

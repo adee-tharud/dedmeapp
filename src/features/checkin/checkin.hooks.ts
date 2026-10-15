@@ -33,7 +33,8 @@ export function useRecordCheckIn(userId: string) {
 
   return useMutation({
     mutationFn: () => recordCheckIn(userId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      qc.setQueryData(checkInKeys.latest(userId), data);
       qc.invalidateQueries({ queryKey: checkInKeys.latest(userId) });
     },
   });
