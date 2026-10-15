@@ -11,7 +11,7 @@
  * UI only — data is mocked for now. Functional wiring (useCaregiverWatch hook)
  * comes in the next phase.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { avatarInitial, computeWatchStatus, timeUntilDue } from '@/utils';
-import { useAuth } from '@/features/auth/AuthContext';
+import { useAuth, setLastUserRole } from '@/features/auth';
 import { useCaregiverWatch, useAcceptCaregiverInvite } from '@/features/contacts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -271,6 +271,10 @@ export default function CaregiverHomeScreen() {
   const [refreshing, setRefreshing]     = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetError, setSheetError]     = useState('');
+
+  useEffect(() => {
+    setLastUserRole('caregiver');
+  }, []);
 
   // Map WatchedPersonRow → WatchedPerson (UI shape)
   const watched: WatchedPerson[] = (watchedList ?? []).map(row => {

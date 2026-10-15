@@ -75,3 +75,61 @@ export async function clearSessionMetadata(): Promise<void> {
     console.error('[SessionService] Failed to clear session metadata:', error);
   }
 }
+
+const HAS_REGISTERED_KEY = 'deadme_has_registered';
+const LAST_USER_ROLE_KEY = 'deadme_last_user_role';
+
+/**
+ * Persists whether the user has previously completed registration / account setup
+ * on this device. When true, unauthenticated app boots route to Sign-In instead of Welcome.
+ */
+export async function setHasRegistered(registered = true): Promise<void> {
+  try {
+    if (registered) {
+      await SecureStore.setItemAsync(HAS_REGISTERED_KEY, 'true');
+    } else {
+      await SecureStore.deleteItemAsync(HAS_REGISTERED_KEY);
+    }
+  } catch (error) {
+    console.error('[SessionService] Failed to set registration status:', error);
+  }
+}
+
+/**
+ * Reads whether this device has a registered account.
+ */
+export async function getHasRegistered(): Promise<boolean> {
+  try {
+    const value = await SecureStore.getItemAsync(HAS_REGISTERED_KEY);
+    return value === 'true';
+  } catch (error) {
+    console.error('[SessionService] Failed to read registration status:', error);
+    return false;
+  }
+}
+
+/**
+ * Persists the user's primary role ('caregiver' or 'user') so cold-boot routing can
+ * navigate directly to the appropriate screen without an intermediate redirect.
+ */
+export async function setLastUserRole(role: 'caregiver' | 'user'): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(LAST_USER_ROLE_KEY, role);
+  } catch (error) {
+    console.error('[SessionService] Failed to set last user role:', error);
+  }
+}
+
+/**
+ * Reads the cached user role.
+ */
+export async function getLastUserRole(): Promise<'caregiver' | 'user' | null> {
+  try {
+    const role = await SecureStore.getItemAsync(LAST_USER_ROLE_KEY);
+    return role === 'caregiver' || role === 'user' ? role : null;
+  } catch (error) {
+    console.error('[SessionService] Failed to get last user role:', error);
+    return null;
+  }
+}
+

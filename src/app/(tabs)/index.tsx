@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
-import { useProfile } from '@/features/auth';
+import { useProfile, setLastUserRole } from '@/features/auth';
 import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday, nextCheckInDue } from '@/features/checkin';
 import { useCaregivers, useCaregiverWatch } from '@/features/contacts';
 import { timeBasedGreeting } from '@/utils';
@@ -39,7 +39,7 @@ const BUTTON_SIZE = Math.round(RING_SIZE * 0.78);
 
 export default function HomeScreen() {
   // §6: read user.id once from auth context; pass into all hooks
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const userId = user?.id ?? '';
 
   // ── Animations ─────────────────────────────────────────────────────────────
@@ -48,17 +48,20 @@ export default function HomeScreen() {
 
   // ── Data fetching — via hook layer, never raw service calls ───────────────
   const { data: profile }       = useProfile();
-  const { data: latestCheckIn } = useLatestCheckIn(userId);
+  const { data: latestCheckIn, isLoading: isCheckInLoading } = useLatestCheckIn(userId);
   const { data: caregivers }    = useCaregivers(userId);
   const { data: watchedList }   = useCaregiverWatch(userId);
 
   const isCaregiverOnly = (watchedList?.length ?? 0) > 0 && (caregivers?.length ?? 0) === 0;
 
   useEffect(() => {
-    if (isCaregiverOnly) {
+    if (userRole === 'caregiver' || isCaregiverOnly) {
+      setLastUserRole('caregiver');
       router.replace('/(tabs)/caregiver-home');
+    } else if (caregivers && caregivers.length > 0) {
+      setLastUserRole('user');
     }
-  }, [isCaregiverOnly]);
+  }, [userRole, isCaregiverOnly, caregivers]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
   const displayName      = profile?.name?.trim().split(' ')[0] ?? null;
@@ -106,7 +109,7 @@ export default function HomeScreen() {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  if (isCaregiverOnly) {
+  if (userRole === 'caregiver' || isCaregiverOnly) {
     return null;
   }
 
@@ -182,9 +185,9 @@ export default function HomeScreen() {
                 activeOpacity={0.88}
                 accessibilityRole="button"
                 accessibilityLabel={checkedIn ? 'Checked in' : 'Tap to check in'}
-                disabled={checkedIn || checkInMutation.isPending}
+                disabled={checkedIn || checkInMutation.isPending || (isCheckInLoading && !latestCheckIn)}
               >
-                {checkInMutation.isPending ? (
+                {checkInMutation.isPending || (isCheckInLoading && !latestCheckIn) ? (
                   <ActivityIndicator color={colors.white} size="large" />
                 ) : checkedIn ? (
                   <View style={styles.btnContent}>

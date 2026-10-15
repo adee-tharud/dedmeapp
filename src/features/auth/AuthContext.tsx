@@ -20,24 +20,36 @@ import {
   getSessionStartTime,
   isSessionExpired,
   clearSessionMetadata,
+  setHasRegistered,
+  getHasRegistered,
+  getLastUserRole,
+  setLastUserRole,
 } from './session.service';
+import { getCachedCheckIn, checkInKeys } from '@/features/checkin';
+import { queryClient } from '@/lib/queryClient';
 
 interface AuthState {
   session: Session | null;
   user: User | null;
   /** True while the initial session is being loaded and validated from SecureStore */
   isLoading: boolean;
+  hasRegistered: boolean;
+  userRole: 'caregiver' | 'user' | null;
 }
 
 const AuthContext = createContext<AuthState>({
   session: null,
   user: null,
   isLoading: true,
+  hasRegistered: false,
+  userRole: null,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasRegistered, setHasRegisteredState] = useState(false);
+  const [userRole, setUserRole] = useState<'caregiver' | 'user' | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,12 +81,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 1. Initial hydration on app launch
     async function initAuth() {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (!isMounted) return;
+        const [sessionRes, registered, cachedRole] = await Promise.all([
+          supabase.auth.getSession(),
+          getHasRegistered(),
+          getLastUserRole(),
+        ]);
+        let activeRole = cachedRole;
 
-        const activeSession = await validateAndApplySession(data.session);
+        const activeSession = await validateAndApplySession(sessionRes.data.session);
         if (isMounted) {
           setSession(activeSession);
+          const isRegistered = registered || !!activeSession;
+          setHasRegisteredState(isRegistered);
+          if (activeSession) {
+            await setHasRegistered(true);
+
+            // Deduce role if not yet cached in SecureStore for this device
+            if (!activeRole && activeSession.user?.id) {
+              try {
+                const { count } = await supabase
+                  .from('caregivers')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('caregiver_user_id', activeSession.user.id)
+                  .eq('status', 'accepted');
+                if (count && count > 0) {
+                  activeRole = 'caregiver';
+                  await setLastUserRole('caregiver');
+                } else {
+                  activeRole = 'user';
+                  await setLastUserRole('user');
+                }
+              } catch (roleErr) {
+                console.warn('[Auth] Failed to deduce initial user role:', roleErr);
+              }
+            }
+            setUserRole(activeRole);
+
+            // Pre-seed React Query cache with local check-in timestamp before any screen mounts
+            if (activeSession.user?.id) {
+              const cachedTimestamp = await getCachedCheckIn(activeSession.user.id);
+              if (cachedTimestamp) {
+                queryClient.setQueryData(checkInKeys.latest(activeSession.user.id), {
+                  id: 'cached',
+                  user_id: activeSession.user.id,
+                  checked_in_at: cachedTimestamp,
+                  created_at: cachedTimestamp,
+                });
+              }
+            }
+          } else {
+            setUserRole(null);
+          }
         }
       } catch (err) {
         console.error('[Auth] Failed to initialize session from SecureStore:', err);
@@ -103,8 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } else if (event === 'SIGNED_IN') {
           await recordSessionStart();
+          await setHasRegistered(true);
           if (isMounted) {
             setSession(newSession);
+            setHasRegisteredState(true);
             setIsLoading(false);
           }
         } else if (event === 'TOKEN_REFRESHED') {
@@ -161,7 +220,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user: session?.user ?? null,
+        isLoading,
+        hasRegistered,
+        userRole,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,13 @@
 // Check-in feature — barrel export
 // Consumers: import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday } from '@/features/checkin'
 
-export { fetchLatestCheckIn, recordCheckIn, checkInKeys } from './checkin.service';
+export {
+  fetchLatestCheckIn,
+  recordCheckIn,
+  checkInKeys,
+  saveCachedCheckIn,
+  getCachedCheckIn,
+} from './checkin.service';
 
 export {
   useLatestCheckIn,

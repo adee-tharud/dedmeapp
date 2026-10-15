@@ -82,7 +82,7 @@ const tabStyles = StyleSheet.create({
 });
 
 export default function TabsLayout() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const userId = user?.id ?? '';
 
   // Derive role from DB — runs reactively after sign-in.
@@ -90,15 +90,13 @@ export default function TabsLayout() {
   const { data: caregivers  } = useCaregivers(userId);    // monitored-person view
   const { data: watchedList } = useCaregiverWatch(userId); // caregiver view
 
-  // Roles are derived reactively after sign-in.
-  // - isCaregiver: true if user is watching over 1 or more people.
-  // - isMember: true if user has caregivers, OR if they are not exclusively a caregiver
-  //   (ensures brand-new signups who haven't added caregivers yet still see Home and Messages).
+  // Roles are derived reactively after sign-in, with userRole providing the immediate
+  // synchronous baseline from SecureStore on frame 0 so caregivers never flash the member tab.
   const hasCaregivers = (caregivers?.length ?? 0) > 0;
   const hasWatched    = (watchedList?.length ?? 0) > 0;
 
-  const isCaregiver = hasWatched;
-  const isMember    = hasCaregivers || !hasWatched;
+  const isCaregiver = userRole === 'caregiver' || hasWatched;
+  const isMember    = userRole === 'user' || (hasCaregivers || (!hasWatched && userRole !== 'caregiver'));
 
   // Helper: hide a tab without removing its route from the stack.
   // tabBarItemStyle: { display: 'none' } is the Expo Router-safe way to do this.
@@ -106,6 +104,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName={userRole === 'caregiver' ? 'caregiver-home' : 'index'}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

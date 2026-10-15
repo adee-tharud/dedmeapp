@@ -22,9 +22,10 @@ import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../theme/tokens';
-import { signUpSchema, signUp } from '@/features/auth';
+import { signUpSchema, signUp, useAuth } from '@/features/auth';
 
 export default function SignUpScreen() {
+  const { session } = useAuth();
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -75,6 +76,10 @@ export default function SignUpScreen() {
     }
   };
 
+  if (session) {
+    return <View style={styles.safe} />;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -85,7 +90,13 @@ export default function SignUpScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            }}
             accessibilityLabel="Go back"
           >
             <Text style={styles.backArrow}>←</Text>

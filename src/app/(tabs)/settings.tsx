@@ -128,7 +128,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: () => {
             signOutMutation.mutate(undefined, {
-              onSuccess: () => router.replace('/(auth)/'),
+              onSuccess: () => router.replace('/(auth)/sign-in'),
               onError: () =>
                 Alert.alert('Error', 'Could not log out. Please try again.'),
             });

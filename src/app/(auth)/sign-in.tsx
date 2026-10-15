@@ -21,9 +21,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../theme/tokens';
-import { signInSchema, signIn } from '@/features/auth';
+import { signInSchema, signIn, useAuth, setHasRegistered } from '@/features/auth';
 
 export default function SignInScreen() {
+  const { session } = useAuth();
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +45,7 @@ export default function SignInScreen() {
     setIsLoading(true);
     try {
       await signIn(result.data);
+      await setHasRegistered(true);
       // On success replace so the user can't navigate back to sign-in
       router.replace('/(tabs)');
     } catch (err: unknown) {
@@ -61,6 +63,10 @@ export default function SignInScreen() {
     // TODO: navigate to forgot-password screen or send a reset email
   };
 
+  if (session) {
+    return <View style={styles.safe} />;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -71,7 +77,13 @@ export default function SignInScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            }}
             accessibilityLabel="Go back"
           >
             <Text style={styles.backArrow}>←</Text>

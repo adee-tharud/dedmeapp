@@ -18,7 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
-import { useAuth } from '@/features/auth';
+import { useAuth, setLastUserRole } from '@/features/auth';
 
 // ── Role option card data ─────────────────────────────────────────────────────
 const ROLES = [
@@ -56,12 +56,14 @@ export default function RoleSelectScreen() {
   const handleContinue = () => {
     if (!selected) return;
     if (selected === 'member') {
+      setLastUserRole('user');
       // Existing monitored-person onboarding flow
       router.push({
         pathname: '/(onboarding)/caregiver',
         params: { userId },
       });
     } else {
+      setLastUserRole('caregiver');
       // New caregiver invite-code flow
       router.push({
         pathname: '/(onboarding)/caregiver-join',
