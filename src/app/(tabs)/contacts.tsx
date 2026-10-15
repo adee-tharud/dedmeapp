@@ -7,20 +7,30 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
-import { useCaregivers } from '@/features/contacts';
+import { useCaregivers, useResendCaregiverInvite } from '@/features/contacts';
 import { avatarInitial } from '@/utils';
 
-// ── Status config ─────────────────────────────────────────────────────────────
+// ── Link status config ───────────────────────────────────────────────────────
+// We now have THREE distinct states for a caregiver row:
+//   1. accepted + caregiver_user_id set  → they have the app and are linked
+//   2. accepted + caregiver_user_id null → accepted via email, no app yet (legacy)
+//   3. pending                           → invite sent, waiting for them to act
 
-const STATUS_CONFIG = {
-  accepted: { bg: '#E6F9EE', text: '#1A8A47', label: 'CONNECTED' },
-  pending:  { bg: '#FFF7E0', text: '#A87820', label: 'PENDING' },
-} as const;
+function getLinkStatus(caregiver: { status: string; caregiver_user_id: string | null }) {
+  if (caregiver.status === 'accepted' && caregiver.caregiver_user_id) {
+    return { bg: '#E0F7FA', text: '#00838F', label: 'APP LINKED', icon: 'phone-portrait-outline' as const };
+  }
+  if (caregiver.status === 'accepted') {
+    return { bg: '#E6F9EE', text: '#1A8A47', label: 'CONNECTED', icon: 'checkmark-circle-outline' as const };
+  }
+  return { bg: '#FFF7E0', text: '#A87820', label: 'EMAIL ONLY · PENDING', icon: 'mail-outline' as const };
+}
 
 // ── Caregiver avatar palette ──────────────────────────────────────────────────
 
@@ -42,6 +52,7 @@ export default function ContactsScreen() {
 
   // ✅ Real data from Supabase via hook layer
   const { data: caregivers, isLoading, isError, refetch } = useCaregivers(userId);
+  const resendMutation = useResendCaregiverInvite(userId);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -87,16 +98,15 @@ export default function ContactsScreen() {
         {!isLoading && !isError && (caregivers?.length ?? 0) > 0 && (
           <View style={styles.memberList}>
             {caregivers!.map((caregiver, i) => {
-              const sc = STATUS_CONFIG[caregiver.status];
+              const ls = getLinkStatus(caregiver);
               const av = avatarColors(i);
+              const isPending = caregiver.status === 'pending';
+              const acceptedDate = caregiver.accepted_at
+                ? new Date(caregiver.accepted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : null;
+
               return (
-                <TouchableOpacity
-                  key={caregiver.id}
-                  style={styles.memberCard}
-                  activeOpacity={0.85}
-                  accessibilityLabel={`${caregiver.name}, ${caregiver.relationship ?? 'Caregiver'}, ${sc.label}`}
-                  accessibilityRole="button"
-                >
+                <View key={caregiver.id} style={styles.memberCard}>
                   {/* Avatar */}
                   <View style={[styles.avatar, { backgroundColor: av.bg }]}>
                     <Text style={[styles.avatarText, { color: av.text }]}>
@@ -110,13 +120,53 @@ export default function ContactsScreen() {
                     <Text style={styles.memberRelation}>
                       {caregiver.relationship ?? 'Caregiver'}
                     </Text>
+                    {/* Show linkage date if they have accepted */}
+                    {acceptedDate && (
+                      <Text style={styles.linkedDate}>Linked {acceptedDate}</Text>
+                    )}
+                    {/* Resend invite for still-pending caregivers */}
+                    {isPending && (
+                      <TouchableOpacity
+                        style={[
+                          styles.resendBtn,
+                          resendMutation.isPending && resendMutation.variables === caregiver.id && { opacity: 0.6 },
+                        ]}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Resend invite to ${caregiver.name}`}
+                        disabled={resendMutation.isPending && resendMutation.variables === caregiver.id}
+                        onPress={() => {
+                          resendMutation.mutate(caregiver.id, {
+                            onSuccess: () => {
+                              Alert.alert(
+                                'Invite Sent',
+                                `A fresh invitation code has been sent to ${caregiver.email}. It will remain valid for 72 hours.`,
+                              );
+                            },
+                            onError: (err) => {
+                              Alert.alert('Could Not Resend Invite', err.message);
+                            },
+                          });
+                        }}
+                      >
+                        {resendMutation.isPending && resendMutation.variables === caregiver.id ? (
+                          <ActivityIndicator size="small" color={colors.brand[600]} />
+                        ) : (
+                          <>
+                            <Ionicons name="send-outline" size={12} color={colors.brand[600]} />
+                            <Text style={styles.resendBtnText}>Resend invite</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
 
-                  {/* Status badge */}
-                  <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-                    <Text style={[styles.statusText, { color: sc.text }]}>{sc.label}</Text>
+                  {/* Link status badge */}
+                  <View style={[styles.statusBadge, { backgroundColor: ls.bg }]}>
+                    <Ionicons name={ls.icon} size={11} color={ls.text} />
+                    <Text style={[styles.statusText, { color: ls.text }]}>{ls.label}</Text>
                   </View>
-                </TouchableOpacity>
+                </View>
               );
             })}
           </View>
@@ -251,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xl,
     fontWeight: fontWeights.bold,
   },
-  memberInfo: { flex: 1, gap: 3 },
+  memberInfo: { flex: 1, gap: 4 },
   memberName: {
     fontSize: fontSizes.md,
     fontWeight: fontWeights.bold,
@@ -261,13 +311,39 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.grey[500],
   },
+  linkedDate: {
+    fontSize: fontSizes.xs,
+    color: colors.grey[400],
+  },
+  resendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    backgroundColor: colors.brand[50],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.brand[200],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 4,
+  },
+  resendBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: colors.brand[700],
+  },
   statusBadge: {
     borderRadius: radii.full,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
+    paddingHorizontal: spacing[2],
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: fontWeights.bold,
     letterSpacing: 0.4,
   },

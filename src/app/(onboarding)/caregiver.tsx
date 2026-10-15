@@ -20,11 +20,10 @@ import { saveCaregiver } from '@/features/contacts';
 const RELATIONSHIPS = ['Partner', 'Parent', 'Sibling', 'Friend', 'Child', 'Other'];
 
 export default function CaregiverScreen() {
-  // userId comes from sign-up route param (session is null until email confirmed).
-  // Fall back to session user for cases where screen is reached with a live session.
+  // Session is active after OTP verification; fall back to route param if needed.
   const params = useLocalSearchParams<{ userId?: string }>();
   const { user } = useAuth();
-  const userId = params.userId ?? user?.id;
+  const userId = user?.id ?? params.userId;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');

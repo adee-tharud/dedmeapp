@@ -4,8 +4,15 @@
 export { AuthProvider, useAuth } from './AuthContext';
 
 // Service functions (for callers that need to call directly, e.g. form handlers)
-export { signUp, signIn, signOut, getAuthUser } from './auth.service';
+export { signUp, signIn, signOut, getAuthUser, verifyOtp, resendOtp } from './auth.service';
 export { getProfile, upsertProfile, updateProfile } from './profile.service';
+export {
+  recordSessionStart,
+  getSessionStartTime,
+  isSessionExpired,
+  clearSessionMetadata,
+  ONE_MONTH_MS,
+} from './session.service';
 
 // Hooks (preferred for React components)
 export {
@@ -19,5 +26,5 @@ export {
 } from './auth.hooks';
 
 // Schemas
-export { signUpSchema, signInSchema } from './auth.schema';
-export type { SignUpInput, SignInInput } from './auth.schema';
+export { signUpSchema, signInSchema, verifyOtpSchema } from './auth.schema';
+export type { SignUpInput, SignInInput, VerifyOtpInput } from './auth.schema';

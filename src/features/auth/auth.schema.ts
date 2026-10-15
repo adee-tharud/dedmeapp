@@ -8,6 +8,11 @@
 import { z } from 'zod';
 
 export const signUpSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Please enter your name')
+    .max(100, 'Name is too long'),
   email: z
     .string()
     .trim()
@@ -31,3 +36,17 @@ export const signInSchema = z.object({
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
+
+export const verifyOtpSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email('Invalid email address'),
+  token: z
+    .string()
+    .length(6, 'Code must be 6 digits')
+    .regex(/^\d{6}$/, 'Code must contain only digits'),
+  type: z.enum(['signup', 'email', 'magiclink', 'recovery']),
+});
+
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;

@@ -8,13 +8,19 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useProfile, useSignOut } from '@/features/auth';
+import { useUpdateSettings } from '@/features/settings';
 import { avatarInitial } from '@/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -82,11 +88,30 @@ export default function SettingsScreen() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [editNameVisible, setEditNameVisible] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+
+  const updateSettingsMutation = useUpdateSettings(user?.id ?? '');
 
   // Derived profile display values
   const displayName  = profile?.name ?? user?.email?.split('@')[0] ?? 'You';
   const displayEmail = user?.email ?? '';
   const avatarLetter = avatarInitial(displayName);
+
+  const openEditName = () => {
+    setNameInput(profile?.name ?? '');
+    setEditNameVisible(true);
+  };
+
+  const handleSaveName = () => {
+    if (!user?.id) return;
+    updateSettingsMutation.mutate(
+      { name: nameInput.trim() },
+      {
+        onSuccess: () => setEditNameVisible(false),
+      },
+    );
+  };
 
   // Frequency sublabel
   const freqDays = profile?.check_in_frequency_days ?? 1;
@@ -140,6 +165,7 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.profileCard}
           activeOpacity={0.85}
+          onPress={openEditName}
           accessibilityRole="button"
           accessibilityLabel="Edit profile"
         >
@@ -326,6 +352,44 @@ export default function SettingsScreen() {
         {/* ── Version ───────────────────────────────────────────────────────  */}
         <Text style={styles.version}>Deadme · v1.0.0</Text>
       </ScrollView>
+
+      {/* ── Edit Name Modal ──────────────────────────────────────────────── */}
+      <Modal
+        visible={editNameVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditNameVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Your name</Text>
+              <TouchableOpacity
+                onPress={() => setEditNameVisible(false)}
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={20} color={colors.grey[500]} />
+              </TouchableOpacity>
+            </View>
+            <Input
+              label="Full name"
+              placeholder="e.g. Alice Smith"
+              value={nameInput}
+              onChangeText={setNameInput}
+              autoCapitalize="words"
+            />
+            <Button
+              label={updateSettingsMutation.isPending ? 'Saving…' : 'Save name'}
+              onPress={handleSaveName}
+              loading={updateSettingsMutation.isPending}
+              disabled={nameInput.trim().length === 0 || updateSettingsMutation.isPending}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -461,5 +525,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: fontSizes.xs,
     color: colors.grey[300],
+  },
+
+  // Edit Name Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: spacing[5],
+  },
+  modalCard: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: spacing[5],
+    gap: spacing[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    color: colors.brand[900],
   },
 });

@@ -25,20 +25,21 @@ import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/toke
 import { signUpSchema, signUp } from '@/features/auth';
 
 export default function SignUpScreen() {
+  const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   /** Derive the disabled state from Zod so the button rule matches the submit rule. */
-  const parseResult = signUpSchema.safeParse({ email, password });
+  const parseResult = signUpSchema.safeParse({ name, email, password });
   const isFormValid = parseResult.success;
 
   const handleCreate = async () => {
     setError('');
 
     // Client-side Zod validation (UX convenience — server also validates)
-    const result = signUpSchema.safeParse({ email, password });
+    const result = signUpSchema.safeParse({ name, email, password });
     if (!result.success) {
       setError(result.error.issues[0].message);
       return;
@@ -48,15 +49,16 @@ export default function SignUpScreen() {
     try {
       const data = await signUp(result.data);
 
-      // Always proceed to onboarding immediately — the caregiver and plan
-      // steps don't require an active session to collect data.
-      // If email confirmation is required, Supabase returns a user but no
-      // session; the user will be fully authenticated once they click the
-      // link in their inbox. We proceed rather than blocking onboarding.
       if (data.user) {
-        // Pass userId as a param so caregiver screen can save the row
-        // even before the email is confirmed (session will be null until then).
-        router.push({ pathname: '/(onboarding)/caregiver', params: { userId: data.user.id } });
+        // Navigate to OTP verification screen so the user enters the 6-digit code
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            email: result.data.email,
+            context: 'signup',
+            userId: data.user.id,
+          },
+        });
       } else {
         // Unexpected: no user and no error — surface clearly.
         setError('Account could not be created. Please try again.');
@@ -116,6 +118,15 @@ export default function SignUpScreen() {
 
           {/* ── Form ──────────────────────────────────────────────────────── */}
           <View style={styles.form}>
+            <Input
+              label="Your name"
+              placeholder="e.g. Alice Smith"
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={name}
+              onChangeText={(v) => { setName(v); setError(''); }}
+              textContentType="name"
+            />
             <Input
               label="Email"
               placeholder="you@example.com"
