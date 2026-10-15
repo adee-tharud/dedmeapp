@@ -150,56 +150,25 @@ export async function acceptCaregiverInvite(
 ): Promise<CaregiverRow> {
   const cleanToken = token.trim();
 
-  // 1. Try secure RPC function first (bypasses RLS SELECT restriction)
-  try {
-    const { data: rpcData, error: rpcError } = await (supabase.rpc as any)(
-      'accept_caregiver_invite',
-      {
-        token_input: cleanToken,
-        caregiver_id: userId,
-      },
-    );
-
-    if (!rpcError && rpcData) {
-      return rpcData as CaregiverRow;
-    }
-
-    // If RPC returned a specific error other than missing function, throw it
-    if (
-      rpcError &&
-      rpcError.code !== '42883' &&
-      !rpcError.message.includes('function') &&
-      !rpcError.message.includes('not found in the schema')
-    ) {
-      throw new Error(
-        rpcError.message ||
-          'Invite code not found or already used. Please check your email and try again.',
-      );
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error && !err.message.includes('function')) {
-      throw err;
-    }
-  }
-
-  // 2. Fallback to direct table UPDATE
-  const { data, error } = await supabase
-    .from('caregivers')
-    .update({
-      caregiver_user_id: userId,
-      accepted_at:       new Date().toISOString(),
-      status:            'accepted',
-    } as any)
-    .eq('invite_token', cleanToken)
-    .eq('status', 'pending')
-    .select()
-    .single();
+  // Call the hardened SECURITY DEFINER RPC function
+  const { data, error } = await (supabase.rpc as any)(
+    'accept_caregiver_invite',
+    {
+      token_input: cleanToken,
+      caregiver_id: userId,
+    },
+  );
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      throw new Error('Invite code not found or already used. Please check your email and try again.');
-    }
-    throw error;
+    console.error('[CaregiverService] acceptCaregiverInvite failed:', error.message);
+    throw new Error(
+      error.message ||
+        'Invite code not found or already used. Please check your email and try again.',
+    );
+  }
+
+  if (!data) {
+    throw new Error('Failed to accept invitation. Please try again.');
   }
 
   return data as CaregiverRow;

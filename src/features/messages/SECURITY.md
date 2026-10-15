@@ -2,58 +2,98 @@
 
 ## Threat Model
 
-Messages are private final notes. A breach that exposes them is a broken promise 
-to someone who may no longer be able to complain. We treat the message body with 
-the same care as a password.
+Messages are private final notes. A breach that exposes them is a broken promise to someone who may no longer be able to complain. We treat the message body with the same care as a password.
 
-## What we protect against
+At the same time, because **Deadme is a dead-man's switch**, the system must guarantee that if the monitored individual passes away or is incapacitated, their intended recipients **can actually receive and read** the final notes they left behind.
+
+---
+
+## What We Protect Against
 
 | Threat | Mitigation |
 |---|---|
-| Supabase database breach | Client-side encryption: DB only stores ciphertext |
-| RLS misconfiguration exposing rows | Encryption is a defence-in-depth layer |
-| Another user calling the API with a different user_id | RLS policy: `auth.uid() = user_id` |
-| Plaintext body in transit | HTTPS (Supabase default) |
-| Key extracted from JS bundle | Key lives only in expo-secure-store (Keychain/Keystore), never in code |
-| Logs leaking body | Never log message body anywhere |
+| Supabase database breach | Zero plaintext in DB: `messages.body` only ever contains encrypted ciphertext and envelopes. |
+| RLS misconfiguration exposing rows | Encryption provides defence-in-depth: reading raw rows grants no plaintext access. |
+| Another user calling the API with different `user_id` | RLS policies: `auth.uid() = user_id`. |
+| Plaintext body in transit | Client-side encryption before HTTP dispatch + TLS/HTTPS. |
+| Key extraction from JS bundle | User keys live exclusively in hardware-backed `expo-secure-store` (Keychain / Keystore). |
+| Server-side message snooping in daily life | Escrow private key is restricted to the isolated Stage 3 Escalation Edge Function, which runs only after check-ins and grace periods have completely lapsed. |
+| Weak or predictable random numbers | Hardware-backed native CSPRNG via `expo-crypto` (`SecRandomCopyBytes` / `getrandom`). |
+| Logs leaking body or private keys | Bodies and private keys are strictly barred from console output, logs, or telemetry. |
 
-## Encryption scheme
+---
 
-- **Algorithm**: XSalsa20-Poly1305 (NaCl `secretbox`) via `tweetnacl`
-  - Authenticated encryption: confidentiality + integrity in one primitive
-  - 256-bit key, 192-bit random nonce per message
-  - Well-audited pure-JS, no native module required → works in Expo Go + dev builds
-  
-- **Key management**:
-  - One 32-byte random key per user, generated on first login
-  - Stored in `expo-secure-store` keyed by `msg_key_<userId>`
-  - On iOS → device Keychain (hardware-backed on modern devices)
-  - On Android → Android Keystore
-  - Key NEVER leaves the device. Server only ever sees ciphertext.
+## Dual-Envelope Encryption Architecture (v2)
 
-- **Stored format** in `messages.body`:
-  ```
-  <base64(nonce)>.<base64(ciphertext)>
-  ```
-  Nonce is prepended so each encrypt call is unique and decryptable independently.
+To resolve the **Dead-Man's Switch Delivery Paradox** (where a local-only key prevents posthumous delivery), Deadme employs a **Dual-Envelope Envelope Encryption** scheme:
 
-## What is NOT encrypted (by design)
+```
+                            ┌────────────────────────┐
+                            │  Message Body (Plain)  │
+                            └───────────┬────────────┘
+                                        │ Encrypted with Message Data Key (MDK)
+                                        │ via XSalsa20-Poly1305 (secretbox)
+                                        ▼
+                            ┌────────────────────────┐
+                            │   Message Ciphertext   │
+                            └────────────────────────┘
+                                        │
+                 ┌──────────────────────┴──────────────────────┐
+                 ▼                                             ▼
+       [ User Device Envelope ]                      [ Escrow Delivery Envelope ]
+    MDK encrypted with User Device Key            MDK sealed with Server Escrow Public Key
+      (from expo-secure-store)                     (via Ephemeral-Static X25519 nacl.box)
+                 │                                             │
+                 └──────────────────────┬──────────────────────┘
+                                        ▼
+                         v2.<user_env>.<escrow_env>.<nonce>.<ciphertext>
+                                        │
+                                        ▼
+                          Stored in `messages.body`
+```
 
-- `recipient_name`, `recipient_email`, `recipient_phone` — needed server-side
-  to actually deliver the message when the escalation engine fires. These are 
-  protected by RLS only.
-- `timing_type`, `status`, `created_at` — operational metadata.
+### 1. Message Data Key (MDK)
+- Every message encrypt generates a fresh, cryptographically random 32-byte key ($K_m$) and 24-byte nonce using `expo-crypto`.
+- The plaintext is encrypted using XSalsa20-Poly1305 (`nacl.secretbox`).
 
-## Key loss scenario
+### 2. Envelope A: User Device Envelope (Local Read/Edit)
+- $K_m$ is encrypted with the user's local 256-bit key ($K_{user}$) stored in `expo-secure-store`.
+- Format: `<user_nonce>:<user_box>`
+- Enables the user to view, edit, and manage their letters locally at any time without involving the server.
 
-If a user deletes the app or loses their device, their encryption key is lost
-and existing messages cannot be decrypted. This is the correct trade-off at MVP:
-- Document this clearly in the UI before the user writes their first message
-- Future: allow optional key backup via a user-held passphrase (PBKDF2/Argon2)
+### 3. Envelope B: Escrow Delivery Envelope (Posthumous Delivery)
+- $K_m$ is sealed using the Server Escrow Public Key ($PK_{escrow}$) via ephemeral Diffie-Hellman:
+  - Generates an ephemeral X25519 keypair ($SK_{eph}, PK_{eph}$).
+  - Encrypts $K_m$ using `nacl.box(K_m, nonce, PK_{escrow}, SK_{eph})`.
+  - Format: `<PK_eph>:<escrow_nonce>:<escrow_box>`
+- **The corresponding Escrow Private Key ($SK_{escrow}$):**
+  - **NEVER** exists in the client app bundle or repository.
+  - Stored strictly as a Supabase Edge Function secret (`ESCROW_PRIVATE_KEY`).
+  - Read **only** by the background Escalation Edge Function when Stage 3 triggers (after all check-in deadlines and grace periods have expired).
+  - The Edge Function unseals Envelope B, recovers $K_m$, decrypts the message body, and formats the delivery email to the recipient.
 
-## Migration path to recipient-side E2E (post-MVP)
+---
 
-At MVP: symmetric key per user, held on device.
-Later: generate a keypair per user; encrypt message body with recipient's public key
-so only the recipient can decrypt on delivery. This requires recipient key exchange
-during the invitation flow — documented here for future implementation.
+## Wire Format
+
+Stored in `messages.body`:
+
+```
+v2.<user_envelope>.<escrow_envelope>.<msg_nonce>.<msg_ciphertext>
+```
+
+- `user_envelope`   = `base64url(nonce):base64url(box)`
+- `escrow_envelope` = `base64url(eph_pubkey):base64url(nonce):base64url(box)` (or `none` if escrow is unconfigured)
+- `msg_nonce`       = `base64url(nonce)`
+- `msg_ciphertext`  = `base64url(ciphertext)`
+
+### Backward Compatibility (v1)
+Legacy messages created before v2 (`<nonce>.<ciphertext>`) are automatically detected and decrypted by `decryptBody()` using the user's device key.
+
+---
+
+## What is NOT Encrypted (Operational Metadata)
+
+- `recipient_name`, `recipient_email`, `recipient_phone` — required server-side for delivery dispatch.
+- `timing_type`, `status`, `created_at`, `updated_at` — operational scheduling metadata.
+Protected strictly by Row-Level Security (`auth.uid() = user_id`).
