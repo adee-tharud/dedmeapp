@@ -15,6 +15,7 @@ import {
   saveCaregiver,
   acceptCaregiverInvite,
   getCaregiverWatch,
+  sendCaregiverInvite,
 } from './caregivers.service';
 import type { SaveCaregiverInput } from './caregivers.service';
 
@@ -90,3 +91,19 @@ export function useAcceptCaregiverInvite(userId: string) {
     },
   });
 }
+
+/**
+ * Resends an invitation email to a pending caregiver with token rotation and rate limit handling.
+ * Used on: (tabs)/contacts.tsx
+ */
+export function useResendCaregiverInvite(userId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (caregiverId: string) => sendCaregiverInvite(caregiverId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: caregiverKeys.byUser(userId) });
+    },
+  });
+}
+

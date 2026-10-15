@@ -6,6 +6,7 @@ export {
   getCaregivers,
   acceptCaregiverInvite,
   getCaregiverWatch,
+  sendCaregiverInvite,
 } from './caregivers.service';
 
 export type {
@@ -18,5 +19,6 @@ export {
   useSaveCaregiver,
   useCaregiverWatch,
   useAcceptCaregiverInvite,
+  useResendCaregiverInvite,
   caregiverKeys,
 } from './caregivers.hooks';

@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { useAuth } from '@/features/auth';
 
 // ── Role option card data ─────────────────────────────────────────────────────
 const ROLES = [
@@ -48,6 +49,8 @@ type RoleKey = 'member' | 'caregiver';
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function RoleSelectScreen() {
   const params = useLocalSearchParams<{ userId?: string }>();
+  const { user } = useAuth();
+  const userId = user?.id ?? params.userId;
   const [selected, setSelected] = useState<RoleKey | null>(null);
 
   const handleContinue = () => {
@@ -56,13 +59,13 @@ export default function RoleSelectScreen() {
       // Existing monitored-person onboarding flow
       router.push({
         pathname: '/(onboarding)/caregiver',
-        params: { userId: params.userId },
+        params: { userId },
       });
     } else {
       // New caregiver invite-code flow
       router.push({
         pathname: '/(onboarding)/caregiver-join',
-        params: { userId: params.userId },
+        params: { userId },
       });
     }
   };

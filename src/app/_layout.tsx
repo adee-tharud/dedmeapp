@@ -1,6 +1,7 @@
 /**
  * Root layout — mounts the single auth listener and handles session-based
- * navigation so no signed-out user can reach (tabs) via deep link.
+ * navigation so no signed-out user can reach (tabs) via deep link, and returning
+ * authenticated users automatically bypass the login screens into the app.
  *
  * Security Guide §4: add a session listener once, in the root layout, and
  * gate every tab/onboarding route behind a session check.
@@ -8,11 +9,17 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { colors } from '../theme/tokens';
-import { AuthProvider, useAuth } from '../features/auth/AuthContext';
-import { queryClient } from '../lib/queryClient';
-import { useRegisterPushToken } from '../features/notifications';
+import { colors } from '@/theme/tokens';
+import { AuthProvider, useAuth } from '@/features/auth/AuthContext';
+import { queryClient } from '@/lib/queryClient';
+import { useRegisterPushToken } from '@/features/notifications';
+
+// Prevent native splash screen from hiding until auth hydration completes
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Gracefully no-ops in environments where splash screen isn't available
+});
 
 /** Inner component that can use the auth context provided above it. */
 function RootNavigator() {
@@ -23,23 +30,23 @@ function RootNavigator() {
   // Register push token whenever a session is active.
   // Gracefully no-ops in Expo Go (see notifications.service).
   useRegisterPushToken(session?.user?.id ?? '');
-  useEffect(() => {
-    if (isLoading) return; // still hydrating — don't redirect yet
 
-    // Only the main app tabs require an active session.
-    // Onboarding runs right after sign-up before email confirmation,
-    // so it must NOT require a session — blocking it here was causing
-    // the root layout to kick the user back to auth immediately after
-    // sign-up when email confirmation is enabled (session is null until confirmed).
+  useEffect(() => {
+    if (isLoading) return; // Still hydrating session from SecureStore — keep splash screen visible
+
     const inProtectedRoute = segments[0] === '(tabs)';
+    const inWelcomeRoute = !segments[0] || segments[0] === 'index';
 
     if (!session && inProtectedRoute) {
-      // Signed-out user trying to access a protected route → send to auth
+      // Signed-out or expired session user trying to access protected route → send to auth
       router.replace('/(auth)/');
+    } else if (session && inWelcomeRoute) {
+      // Returning authenticated user with valid 30-day session → auto-route to main app tabs
+      router.replace('/(tabs)');
     }
-    // Note: we intentionally do NOT auto-redirect on sign-in here; each
-    // auth screen navigates explicitly after success so errors can still
-    // be surfaced on that screen.
+
+    // Dismiss the splash screen now that initial route determination is done
+    SplashScreen.hideAsync().catch(() => {});
   }, [session, isLoading, segments, router]);
 
   return (

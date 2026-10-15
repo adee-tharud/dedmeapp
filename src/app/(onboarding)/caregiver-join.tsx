@@ -27,9 +27,8 @@ import { useAuth } from '@/features/auth/AuthContext';
 export default function CaregiverJoinScreen() {
   const params = useLocalSearchParams<{ userId?: string }>();
   const { user } = useAuth();
-  // Prefer route param (available right after sign-up, before session resolves);
-  // fall back to live session user.
-  const userId = params.userId ?? user?.id ?? '';
+  // Session is active after OTP verification; fall back to route param if needed.
+  const userId = user?.id ?? params.userId ?? '';
 
   const [token, setToken] = useState('');
   const [error, setError] = useState('');

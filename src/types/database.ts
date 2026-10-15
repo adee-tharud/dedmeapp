@@ -47,6 +47,10 @@ export interface Database {
           relationship: string | null;
           status: 'pending' | 'accepted';
           invite_token: string;
+          /** 72-hour expiration window for the invite token */
+          invite_expires_at: string | null;
+          /** Timestamp when an invite email was last dispatched (for rate limiting) */
+          last_invite_sent_at: string | null;
           /** null until the caregiver signs up and redeems the invite */
           caregiver_user_id: string | null;
           /** null while status is 'pending' */
@@ -62,6 +66,8 @@ export interface Database {
           relationship?: string | null;
           status?: 'pending' | 'accepted';
           invite_token?: string;
+          invite_expires_at?: string | null;
+          last_invite_sent_at?: string | null;
           caregiver_user_id?: string | null;
           accepted_at?: string | null;
           created_at?: string;
@@ -75,6 +81,8 @@ export interface Database {
           relationship?: string | null;
           status?: 'pending' | 'accepted';
           invite_token?: string;
+          invite_expires_at?: string | null;
+          last_invite_sent_at?: string | null;
           /** Set when a caregiver redeems their invite token */
           caregiver_user_id?: string | null;
           accepted_at?: string | null;

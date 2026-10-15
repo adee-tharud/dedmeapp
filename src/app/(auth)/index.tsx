@@ -49,15 +49,16 @@ export default function SignUpScreen() {
     try {
       const data = await signUp(result.data);
 
-      // Always proceed to onboarding immediately — the caregiver and plan
-      // steps don't require an active session to collect data.
-      // If email confirmation is required, Supabase returns a user but no
-      // session; the user will be fully authenticated once they click the
-      // link in their inbox. We proceed rather than blocking onboarding.
       if (data.user) {
-        // Pass userId as a param so caregiver screen can save the row
-        // even before the email is confirmed (session will be null until then).
-        router.push({ pathname: '/(onboarding)/role-select', params: { userId: data.user.id } });
+        // Navigate to OTP verification screen so the user enters the 6-digit code
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            email: result.data.email,
+            context: 'signup',
+            userId: data.user.id,
+          },
+        });
       } else {
         // Unexpected: no user and no error — surface clearly.
         setError('Account could not be created. Please try again.');

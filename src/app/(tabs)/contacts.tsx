@@ -7,12 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
-import { useCaregivers } from '@/features/contacts';
+import { useCaregivers, useResendCaregiverInvite } from '@/features/contacts';
 import { avatarInitial } from '@/utils';
 
 // ── Link status config ───────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export default function ContactsScreen() {
 
   // ✅ Real data from Supabase via hook layer
   const { data: caregivers, isLoading, isError, refetch } = useCaregivers(userId);
+  const resendMutation = useResendCaregiverInvite(userId);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -125,16 +127,36 @@ export default function ContactsScreen() {
                     {/* Resend invite for still-pending caregivers */}
                     {isPending && (
                       <TouchableOpacity
-                        style={styles.resendBtn}
+                        style={[
+                          styles.resendBtn,
+                          resendMutation.isPending && resendMutation.variables === caregiver.id && { opacity: 0.6 },
+                        ]}
                         activeOpacity={0.75}
                         accessibilityRole="button"
                         accessibilityLabel={`Resend invite to ${caregiver.name}`}
+                        disabled={resendMutation.isPending && resendMutation.variables === caregiver.id}
                         onPress={() => {
-                          // TODO phase 2: call resendInvite(caregiver.id)
+                          resendMutation.mutate(caregiver.id, {
+                            onSuccess: () => {
+                              Alert.alert(
+                                'Invite Sent',
+                                `A fresh invitation code has been sent to ${caregiver.email}. It will remain valid for 72 hours.`,
+                              );
+                            },
+                            onError: (err) => {
+                              Alert.alert('Could Not Resend Invite', err.message);
+                            },
+                          });
                         }}
                       >
-                        <Ionicons name="send-outline" size={12} color={colors.brand[600]} />
-                        <Text style={styles.resendBtnText}>Resend invite</Text>
+                        {resendMutation.isPending && resendMutation.variables === caregiver.id ? (
+                          <ActivityIndicator size="small" color={colors.brand[600]} />
+                        ) : (
+                          <>
+                            <Ionicons name="send-outline" size={12} color={colors.brand[600]} />
+                            <Text style={styles.resendBtnText}>Resend invite</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     )}
                   </View>
