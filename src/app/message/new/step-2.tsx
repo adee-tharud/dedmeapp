@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StepIndicator } from '../../../components/ui/StepIndicator';
 import { Button } from '../../../components/ui/Button';
 import { useDraftStore } from '@/features/messages';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../../theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../../theme/tokens';
 
 export default function Step2Screen() {
   const { body, setBody } = useDraftStore();
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 40, height: 40, borderRadius: radii.full,
     backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...shadows.subtle,
   },
   headerTitle: { fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.brand[900] },
   stepRow: { alignItems: 'center', paddingBottom: spacing[4] },

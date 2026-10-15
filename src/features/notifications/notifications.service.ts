@@ -12,6 +12,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { colors } from '@/theme/tokens';
 
 // ── Push token helpers ────────────────────────────────────────────────────────
 
@@ -108,6 +109,6 @@ export function setupAndroidNotificationChannel(): void {
     name: 'Check-in alerts',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#4F6BFF',
+    lightColor: colors.accent.notify,
   });
 }

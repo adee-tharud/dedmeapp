@@ -25,7 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useMessage, useActivateMessage, useDeleteMessage } from '@/features/messages';
 import { avatarInitial, formatRelativeDate } from '@/utils';
@@ -38,20 +38,20 @@ const STATUS_CONFIG: Record<
   { bg: string; text: string; label: string; icon: keyof typeof Ionicons.glyphMap }
 > = {
   active: {
-    bg: '#E6F9EE',
-    text: '#1A8A47',
+    bg: colors.surface.success,
+    text: colors.surface.successDark,
     label: 'ACTIVE',
     icon: 'shield-checkmark',
   },
   draft: {
-    bg: '#F1F5F9',
-    text: '#64748B',
+    bg: colors.surface.draft,
+    text: colors.surface.draftText,
     label: 'DRAFT',
     icon: 'document-text-outline',
   },
   sent: {
-    bg: '#E8F0FE',
-    text: '#1A56DB',
+    bg: colors.surface.info,
+    text: colors.surface.infoText,
     label: 'SENT',
     icon: 'paper-plane',
   },
@@ -281,7 +281,7 @@ export default function MessageDetailScreen() {
 
         {/* ── Encryption Guarantee ────────────────────────────────────────── */}
         <View style={styles.securityBanner}>
-          <Ionicons name="shield-checkmark" size={18} color="#00838F" />
+          <Ionicons name="shield-checkmark" size={18} color={colors.caregiver[700]} />
           <View style={{ flex: 1 }}>
             <Text style={styles.securityTitle}>Dual-Envelope Encryption Active</Text>
             <Text style={styles.securityText}>
@@ -389,11 +389,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.subtle,
   },
   headerTitle: {
     fontSize: fontSizes.lg,
@@ -448,11 +444,7 @@ const styles = StyleSheet.create({
     borderRadius: radii['2xl'],
     padding: spacing[5],
     gap: spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.card,
   },
   avatar: {
     width: 52,
@@ -517,21 +509,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing[3],
-    backgroundColor: '#E0F7FA',
+    backgroundColor: colors.surface.caregiver,
     borderRadius: radii.xl,
     padding: spacing[4],
     borderWidth: 1,
-    borderColor: '#B2EBF2',
+    borderColor: colors.surface.caregiverBorder,
   },
   securityTitle: {
     fontSize: fontSizes.sm,
     fontWeight: fontWeights.bold,
-    color: '#006064',
+    color: colors.surface.caregiverDark,
     marginBottom: 2,
   },
   securityText: {
     fontSize: fontSizes.xs,
-    color: '#00838F',
+    color: colors.surface.caregiverText,
     lineHeight: fontSizes.xs * 1.5,
   },
   messageCard: {
@@ -539,11 +531,7 @@ const styles = StyleSheet.create({
     borderRadius: radii['2xl'],
     padding: spacing[5],
     gap: spacing[3],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.subtle,
   },
   messageHeader: {
     flexDirection: 'row',
@@ -583,7 +571,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.surface.danger,
     padding: spacing[4],
     borderRadius: radii.lg,
   },
@@ -605,8 +593,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     borderRadius: radii.xl,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FEF2F2',
+    borderColor: colors.surface.dangerBorder,
+    backgroundColor: colors.surface.danger,
   },
   deleteBtnText: {
     fontSize: fontSizes.sm,
@@ -630,16 +618,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    backgroundColor: '#E6F9EE',
+    backgroundColor: colors.surface.success,
     padding: spacing[3],
     borderRadius: radii.xl,
     borderWidth: 1,
-    borderColor: '#C3EEDB',
+    borderColor: colors.surface.successBorder,
     marginTop: spacing[2],
   },
   activeNoticeText: {
     fontSize: fontSizes.xs,
     fontWeight: fontWeights.medium,
-    color: '#1A8A47',
+    color: colors.surface.successDark,
   },
 });

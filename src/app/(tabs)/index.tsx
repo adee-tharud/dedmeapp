@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useProfile } from '@/features/auth';
 import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday, nextCheckInDue } from '@/features/checkin';
@@ -155,7 +155,7 @@ export default function HomeScreen() {
                 cx={RING_SIZE / 2}
                 cy={RING_SIZE / 2}
                 r={RADIUS}
-                stroke={checkedIn ? '#D1FAE5' : '#D0E5FC'}
+                stroke={checkedIn ? colors.surface.successTrack : colors.surface.infoTrack}
                 strokeWidth={STROKE_WIDTH}
                 fill="none"
               />
@@ -164,7 +164,7 @@ export default function HomeScreen() {
                 cx={RING_SIZE / 2}
                 cy={RING_SIZE / 2}
                 r={RADIUS}
-                stroke={checkedIn ? colors.success : '#1654D1'}
+                stroke={checkedIn ? colors.success : colors.accent.hero}
                 strokeWidth={STROKE_WIDTH}
                 strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
                 strokeDashoffset={CIRCUMFERENCE * (1 - (checkedIn ? 1 : 0.42))}
@@ -311,11 +311,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.subtle,
   },
   avatarIcon: { fontSize: fontSizes.xl, color: colors.grey[500] },
 
@@ -329,21 +325,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    elevation: 3,
+    ...shadows.subtle,
   },
   statusText: {
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 1.4,
-    color: '#3F5D7E',
+    color: colors.accent.textMuted,
     textTransform: 'uppercase',
   },
   statusTextDone: {
-    color: '#15803D',
+    color: colors.surface.successText,
   },
   widgetWrapper: {
     width: HALO_SIZE,
@@ -357,10 +349,10 @@ const styles = StyleSheet.create({
     width: HALO_SIZE,
     height: HALO_SIZE,
     borderRadius: HALO_SIZE / 2,
-    backgroundColor: '#D9ECFD',
+    backgroundColor: colors.surface.infoLight,
   },
   outerHaloDone: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.surface.successLight,
   },
   svgRing: {
     position: 'absolute',
@@ -369,10 +361,10 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: '#1654D1',
+    backgroundColor: colors.accent.hero,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1654D1',
+    shadowColor: colors.accent.hero,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -404,7 +396,7 @@ const styles = StyleSheet.create({
   dueText: {
     fontSize: 19,
     fontWeight: fontWeights.bold,
-    color: '#1B3C6E',
+    color: colors.accent.navy,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
@@ -419,11 +411,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radii.xl,
     padding: spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   cardIconWrap: {
     width: 40,
@@ -433,7 +421,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardIconWarmWrap: { backgroundColor: '#FFF0E0' },
+  cardIconWarmWrap: { backgroundColor: colors.avatar.orange.bg },
   cardIcon: { fontSize: fontSizes.lg, color: colors.brand[600] },
   cardContent: { flex: 1 },
   cardLabel: { fontSize: fontSizes.xs, color: colors.grey[400], fontWeight: fontWeights.medium },
@@ -453,11 +441,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     padding: spacing[4],
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    ...shadows.subtle,
   },
   protectionIcon: { fontSize: fontSizes.xl, color: colors.brand[600] },
   protectionText: {
@@ -470,11 +454,11 @@ const styles = StyleSheet.create({
   // Error
   errorBanner: {
     width: '100%',
-    backgroundColor: '#FFF0F0',
+    backgroundColor: colors.surface.dangerSubtle,
     borderRadius: radii.lg,
     padding: spacing[3],
     borderWidth: 1,
-    borderColor: '#FFCCCC',
+    borderColor: colors.surface.dangerBorderSubtle,
   },
-  errorText: { color: '#CC0000', fontSize: fontSizes.sm, textAlign: 'center' },
+  errorText: { color: colors.surface.dangerText, fontSize: fontSizes.sm, textAlign: 'center' },
 });

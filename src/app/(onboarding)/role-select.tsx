@@ -17,7 +17,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme/tokens';
 import { useAuth } from '@/features/auth';
 
 // ── Role option card data ─────────────────────────────────────────────────────
@@ -36,11 +36,11 @@ const ROLES = [
     key: 'caregiver',
     icon: 'eye' as const,
     iconOutline: 'eye-outline' as const,
-    iconBg: '#E0F7FA',
-    iconColor: '#00838F',
+    iconBg: colors.caregiver[50],
+    iconColor: colors.caregiver[700],
     title: "I'm a caregiver",
     description: "I have an invite code and I'm here to watch over someone.",
-    borderColor: '#00838F',
+    borderColor: colors.caregiver[700],
   },
 ] as const;
 
@@ -199,11 +199,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     borderWidth: 1.5,
     borderColor: colors.grey[200],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   cardTop: {
     flexDirection: 'row',

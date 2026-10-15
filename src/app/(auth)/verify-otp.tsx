@@ -499,9 +499,9 @@ const styles = StyleSheet.create({
 
   // Banners
   errorBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.surface.danger,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: colors.surface.dangerBorder,
     borderRadius: radii.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],

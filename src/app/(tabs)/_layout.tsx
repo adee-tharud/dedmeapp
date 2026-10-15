@@ -69,7 +69,7 @@ const tabStyles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#CC0000',
+    backgroundColor: colors.surface.dangerText,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
@@ -77,7 +77,7 @@ const tabStyles = StyleSheet.create({
   badgeText: {
     fontSize: 9,
     fontWeight: fontWeights.bold,
-    color: '#fff',
+    color: colors.white,
   },
 });
 

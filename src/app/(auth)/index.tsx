@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StepIndicator } from '../../components/ui/StepIndicator';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { colors, fontSizes, fontWeights, radii, spacing } from '../../theme/tokens';
+import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '../../theme/tokens';
 import { signUpSchema, signUp } from '@/features/auth';
 
 export default function SignUpScreen() {
@@ -187,7 +187,7 @@ export default function SignUpScreen() {
               accessibilityLabel="Continue with Google — coming soon"
               disabled
             >
-              <Text style={[styles.socialIcon, { color: '#4285F4', opacity: 0.5 }]}>G</Text>
+              <Text style={[styles.socialIcon, { color: colors.social.google, opacity: 0.5 }]}>G</Text>
               <Text style={[styles.socialLabel, styles.socialLabelDisabled]}>Google</Text>
             </TouchableOpacity>
           </View>
@@ -241,11 +241,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.subtle,
   },
   backArrow: {
     fontSize: fontSizes.lg,
@@ -300,10 +296,10 @@ const styles = StyleSheet.create({
 
   // Error banner
   errorBanner: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.surface.danger,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: colors.surface.dangerBorder,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
   },
@@ -345,11 +341,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.grey[200],
     paddingVertical: spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...shadows.subtle,
   },
   socialBtnDisabled: {
     opacity: 0.5,

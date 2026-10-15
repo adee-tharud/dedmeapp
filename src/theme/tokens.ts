@@ -25,6 +25,7 @@ export const colors = {
   // Neutral
   white:   '#FFFFFF',
   black:   '#000000',
+  overlay: 'rgba(0, 0, 0, 0.45)',
   grey: {
     50:  '#F8FAFC',
     100: '#F1F5F9',
@@ -43,6 +44,80 @@ export const colors = {
   warning:  '#F59E0B',
   danger:   '#EF4444',
   info:     '#3B82F6',
+
+  // Caregiver / Guardian teal palette
+  caregiver: {
+    50:  '#E0F7FA',
+    100: '#B2EBF2',
+    600: '#00ACC1',
+    700: '#00838F',
+    800: '#005F6B',
+    900: '#006064',
+  },
+
+  // Surface & Semantic Variant tokens (backgrounds, borders, high-contrast text)
+  surface: {
+    // Success / Checked In
+    success:            '#E6F9EE',
+    successLight:       '#DCFCE7',
+    successTrack:       '#D1FAE5',
+    successBorder:      '#C3EEDB',
+    successText:        '#15803D',
+    successDark:        '#1A8A47',
+
+    // Danger / Alerts / Error
+    danger:             '#FEF2F2',
+    dangerSubtle:       '#FFF0F0',
+    dangerBorder:       '#FCA5A5',
+    dangerBorderSubtle: '#FFCCCC',
+    dangerText:         '#CC0000',
+
+    // Warning / Due / Pending
+    warning:            '#FFFBEB',
+    warningSubtle:      '#FFF7E0',
+    warningBorder:      '#FDE68A',
+    warningText:        '#92400E',
+    warningDark:        '#A87820',
+
+    // Caregiver / App Linked
+    caregiver:          '#E0F7FA',
+    caregiverBorder:    '#B2EBF2',
+    caregiverText:      '#00838F',
+    caregiverDark:      '#006064',
+
+    // Info / Sent / Draft
+    info:               '#E8F0FE',
+    infoTrack:          '#D0E5FC',
+    infoLight:          '#D9ECFD',
+    infoText:           '#1A56DB',
+    draft:              '#F1F5F9',
+    draftText:          '#64748B',
+  },
+
+  // Avatar and Card Accent Palettes
+  avatar: {
+    blue:   { bg: '#DBEFFE', text: '#1A5FD5' },
+    orange: { bg: '#FFF0E0', text: '#C07830' },
+    purple: { bg: '#F0E8FF', text: '#7B2FBE' },
+    teal:   { bg: '#E0F7FA', text: '#00838F' },
+    amber:  { bg: '#FFF7E0', text: '#A87820' },
+    coral:  { bg: '#FBE9E7', text: '#BF360C' },
+    violet: { bg: '#F0EBFF', text: '#9B6DFF' },
+    green:  { bg: '#F0FDF4', text: '#22C55E' },
+  },
+
+  // Brand Accents
+  accent: {
+    hero:       '#1654D1',
+    textMuted:  '#3F5D7E',
+    navy:       '#1B3C6E',
+    notify:     '#4F6BFF',
+  },
+
+  // Social
+  social: {
+    google: '#4285F4',
+  },
 } as const;
 
 // ─── Typography ───────────────────────────────────────────────────────────────
@@ -123,6 +198,27 @@ export const shadows = {
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
+  },
+  subtle: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  card: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  caregiver: {
+    shadowColor: '#005F6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
 } as const;
 
