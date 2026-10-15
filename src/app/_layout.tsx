@@ -34,7 +34,7 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return; // Still hydrating session from SecureStore — keep splash screen visible
 
-    const inProtectedRoute = segments[0] === '(tabs)';
+    const inProtectedRoute = segments[0] === '(tabs)' || segments[0] === 'message';
     const inWelcomeRoute = !segments[0] || segments[0] === 'index';
 
     if (!session && inProtectedRoute) {
@@ -63,6 +63,8 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="message/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="message/new" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </>
   );

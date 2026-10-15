@@ -9,7 +9,6 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Animated,
@@ -19,6 +18,9 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors, fontSizes, fontWeights, radii, spacing } from '@/theme/tokens';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useProfile } from '@/features/auth';
@@ -26,8 +28,14 @@ import { useLatestCheckIn, useRecordCheckIn, isCheckedInToday, nextCheckInDue } 
 import { useCaregivers, useCaregiverWatch } from '@/features/contacts';
 import { timeBasedGreeting } from '@/utils';
 
-const { width } = Dimensions.get('window');
-const BTN_SIZE = width * 0.62;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const WIDGET_SIZE = Math.min(SCREEN_WIDTH * 0.72, 276);
+const HALO_SIZE = WIDGET_SIZE;
+const RING_SIZE = Math.round(WIDGET_SIZE * 0.89);
+const STROKE_WIDTH = 12;
+const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const BUTTON_SIZE = Math.round(RING_SIZE * 0.78);
 
 export default function HomeScreen() {
   // §6: read user.id once from auth context; pass into all hooks
@@ -35,48 +43,14 @@ export default function HomeScreen() {
   const userId = user?.id ?? '';
 
   // ── Animations ─────────────────────────────────────────────────────────────
-  const [scale]         = useState(() => new Animated.Value(1));
-  const [pulse1]        = useState(() => new Animated.Value(1));
-  const [pulse2]        = useState(() => new Animated.Value(1));
-  const [pulse1Opacity] = useState(() => new Animated.Value(0.35));
-  const [pulse2Opacity] = useState(() => new Animated.Value(0.2));
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(pulse1, { toValue: 1.18, duration: 1200, useNativeDriver: true }),
-          Animated.timing(pulse1Opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pulse1, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(pulse1Opacity, { toValue: 0.35, duration: 0, useNativeDriver: true }),
-        ]),
-      ]),
-    );
-    const loop2 = Animated.loop(
-      Animated.sequence([
-        Animated.delay(600),
-        Animated.parallel([
-          Animated.timing(pulse2, { toValue: 1.18, duration: 1200, useNativeDriver: true }),
-          Animated.timing(pulse2Opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pulse2, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(pulse2Opacity, { toValue: 0.2, duration: 0, useNativeDriver: true }),
-        ]),
-      ]),
-    );
-    loop.start();
-    loop2.start();
-    return () => { loop.stop(); loop2.stop(); };
-  }, [pulse1, pulse1Opacity, pulse2, pulse2Opacity]);
+  const [scale] = useState(() => new Animated.Value(1));
+  const [pulseAnim] = useState(() => new Animated.Value(1));
 
   // ── Data fetching — via hook layer, never raw service calls ───────────────
-  const { data: profile }      = useProfile();
+  const { data: profile }       = useProfile();
   const { data: latestCheckIn } = useLatestCheckIn(userId);
-  const { data: caregivers }   = useCaregivers(userId);
-  const { data: watchedList }  = useCaregiverWatch(userId);
+  const { data: caregivers }    = useCaregivers(userId);
+  const { data: watchedList }   = useCaregiverWatch(userId);
 
   const isCaregiverOnly = (watchedList?.length ?? 0) > 0 && (caregivers?.length ?? 0) === 0;
 
@@ -93,16 +67,38 @@ export default function HomeScreen() {
   const dueIn            = nextCheckInDue(latestCheckIn?.checked_in_at ?? null, frequencyDays);
   const primaryCaregiver = caregivers?.[0] ?? null;
 
+  useEffect(() => {
+    if (checkedIn) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.04,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [checkedIn, pulseAnim]);
+
   // ── Check-in mutation — via hook layer ────────────────────────────────────
   const checkInMutation = useRecordCheckIn(userId);
 
   const handleCheckIn = () => {
     if (checkedIn || checkInMutation.isPending || !userId) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
     // Tap pop animation
     Animated.sequence([
       Animated.spring(scale, { toValue: 0.92, useNativeDriver: true, speed: 40 }),
-      Animated.spring(scale, { toValue: 1.06, useNativeDriver: true, speed: 20 }),
+      Animated.spring(scale, { toValue: 1.05, useNativeDriver: true, speed: 20 }),
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 15 }),
     ]).start();
 
@@ -135,60 +131,83 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Check-in button ──────────────────────────────────────────────── */}
-        <View style={styles.checkInSection}>
-          {/* Outer pulse rings */}
-          <Animated.View
-            style={[
-              styles.pulseRing,
-              { transform: [{ scale: pulse2 }], opacity: pulse2Opacity },
-            ]}
-          />
-          <Animated.View
-            style={[
-              styles.pulseRing,
-              styles.pulseRingInner,
-              { transform: [{ scale: pulse1 }], opacity: pulse1Opacity },
-            ]}
-          />
+        {/* ── Check-in Card (Matches new mockup, no mascot) ───────────────── */}
+        <View style={styles.checkInCard}>
+          {/* Top Status */}
+          <Text style={[styles.statusText, checkedIn && styles.statusTextDone]}>
+            {checkedIn ? 'CHECKED IN' : 'NOT CHECKED IN'}
+          </Text>
 
-          {/* The big button */}
-          <Animated.View style={{ transform: [{ scale }] }}>
-            <TouchableOpacity
-              style={[styles.checkInBtn, checkedIn && styles.checkInBtnDone]}
-              onPress={handleCheckIn}
-              activeOpacity={0.9}
-              accessibilityRole="button"
-              accessibilityLabel={checkedIn ? 'Checked in' : "Check in — I'm okay"}
-              disabled={checkedIn || checkInMutation.isPending}
-            >
-              {checkInMutation.isPending ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Image
-                  source={require('../../../assets/logo1.png')}
-                  style={styles.mascot}
-                  resizeMode="contain"
-                />
-              )}
-              <Text style={styles.checkInLabel}>
-                {checkedIn ? '✓ Checked in!' : "I'm okay"}
-              </Text>
-              <Text style={styles.checkInSub}>
-                {checkedIn ? 'See you tomorrow 👋' : 'Tap to check in'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
+          {/* Central Circular Button Widget */}
+          <View style={styles.widgetWrapper}>
+            {/* Outer soft halo */}
+            <Animated.View
+              style={[
+                styles.outerHalo,
+                checkedIn ? styles.outerHaloDone : { transform: [{ scale: pulseAnim }] },
+              ]}
+            />
 
-        {/* ── Next due ────────────────────────────────────────────────────── */}
-        <View style={styles.dueRow}>
-          <Text style={styles.dueIcon}>◷</Text>
+            {/* SVG Ring Track & Progress Arc */}
+            <Svg width={RING_SIZE} height={RING_SIZE} style={styles.svgRing}>
+              {/* Background Track Circle */}
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RADIUS}
+                stroke={checkedIn ? '#D1FAE5' : '#D0E5FC'}
+                strokeWidth={STROKE_WIDTH}
+                fill="none"
+              />
+              {/* Active Blue Progress Arc */}
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RADIUS}
+                stroke={checkedIn ? colors.success : '#1654D1'}
+                strokeWidth={STROKE_WIDTH}
+                strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                strokeDashoffset={CIRCUMFERENCE * (1 - (checkedIn ? 1 : 0.42))}
+                strokeLinecap="round"
+                fill="none"
+                transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+              />
+            </Svg>
+
+            {/* Main Tap Button */}
+            <Animated.View style={{ transform: [{ scale }] }}>
+              <TouchableOpacity
+                style={[styles.checkInBtn, checkedIn && styles.checkInBtnDone]}
+                onPress={handleCheckIn}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+                accessibilityLabel={checkedIn ? 'Checked in' : 'Tap to check in'}
+                disabled={checkedIn || checkInMutation.isPending}
+              >
+                {checkInMutation.isPending ? (
+                  <ActivityIndicator color={colors.white} size="large" />
+                ) : checkedIn ? (
+                  <View style={styles.btnContent}>
+                    <Ionicons name="checkmark-sharp" size={38} color={colors.white} />
+                    <Text style={styles.btnCheckedText}>Checked in</Text>
+                  </View>
+                ) : (
+                  <View style={styles.btnContent}>
+                    <Text style={styles.btnText}>Tap to</Text>
+                    <Text style={styles.btnText}>check in</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+
+          {/* Bottom Due Info */}
           <Text style={styles.dueText}>
             {checkedIn
-              ? <>Next check-in due in <Text style={styles.dueBold}>{dueIn}</Text></>
-              : <Text style={styles.dueBold}>Check-in due — tap the button!</Text>
-            }
+              ? `Next check-in due in ${dueIn}`
+              : dueIn === 'overdue'
+                ? 'Check-in overdue — tap above!'
+                : `Due in ${dueIn}`}
           </Text>
         </View>
 
@@ -266,8 +285,6 @@ export default function HomeScreen() {
   );
 }
 
-const PULSE_SIZE = BTN_SIZE * 1.28;
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.sky.bg },
   scrollContent: {
@@ -302,65 +319,95 @@ const styles = StyleSheet.create({
   },
   avatarIcon: { fontSize: fontSizes.xl, color: colors.grey[500] },
 
-  // Check-in section
-  checkInSection: {
-    width: PULSE_SIZE,
-    height: PULSE_SIZE,
+  // Check-in card & circular widget (Solid white card)
+  checkInCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: 32,
+    paddingVertical: spacing[6],
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
-  pulseRing: {
+  statusText: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: '#3F5D7E',
+    textTransform: 'uppercase',
+  },
+  statusTextDone: {
+    color: '#15803D',
+  },
+  widgetWrapper: {
+    width: HALO_SIZE,
+    height: HALO_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing[1],
+  },
+  outerHalo: {
     position: 'absolute',
-    width: PULSE_SIZE,
-    height: PULSE_SIZE,
-    borderRadius: PULSE_SIZE / 2,
-    backgroundColor: colors.brand[300],
+    width: HALO_SIZE,
+    height: HALO_SIZE,
+    borderRadius: HALO_SIZE / 2,
+    backgroundColor: '#D9ECFD',
   },
-  pulseRingInner: {
-    width: PULSE_SIZE * 0.86,
-    height: PULSE_SIZE * 0.86,
-    borderRadius: (PULSE_SIZE * 0.86) / 2,
-    backgroundColor: colors.brand[400],
+  outerHaloDone: {
+    backgroundColor: '#DCFCE7',
+  },
+  svgRing: {
+    position: 'absolute',
   },
   checkInBtn: {
-    width: BTN_SIZE,
-    height: BTN_SIZE,
-    borderRadius: BTN_SIZE / 2,
-    backgroundColor: colors.brand[700],
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
+    backgroundColor: '#1654D1',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[1],
-    shadowColor: colors.brand[800],
+    shadowColor: '#1654D1',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowRadius: 16,
+    elevation: 8,
   },
   checkInBtnDone: {
     backgroundColor: colors.success,
+    shadowColor: colors.success,
   },
-  mascot: { width: BTN_SIZE * 0.42, height: BTN_SIZE * 0.42 },
-  checkInLabel: {
-    fontSize: fontSizes.xl,
-    fontWeight: fontWeights.extrabold,
-    color: colors.white,
-    letterSpacing: -0.3,
-  },
-  checkInSub: {
-    fontSize: fontSizes.sm,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: fontWeights.medium,
-  },
-
-  // Due timer
-  dueRow: {
-    flexDirection: 'row',
+  btnContent: {
     alignItems: 'center',
-    gap: spacing[2],
+    justifyContent: 'center',
   },
-  dueIcon: { fontSize: fontSizes.lg, color: colors.grey[400] },
-  dueText: { fontSize: fontSizes.sm, color: colors.grey[500] },
-  dueBold: { fontWeight: fontWeights.bold, color: colors.brand[800] },
+  btnText: {
+    fontSize: 27,
+    fontWeight: '800',
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    lineHeight: 33,
+  },
+  btnCheckedText: {
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    color: colors.white,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  dueText: {
+    fontSize: 19,
+    fontWeight: fontWeights.bold,
+    color: '#1B3C6E',
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
 
   // Cards
   cardsRow: { flexDirection: 'row', gap: spacing[3], width: '100%' },

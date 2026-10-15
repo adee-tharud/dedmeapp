@@ -7,7 +7,14 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const nacl = require('tweetnacl');
+
+// Bind TweetNaCl to Node's CSPRNG
+nacl.setPRNG((x, n) => {
+  const buf = crypto.randomBytes(n);
+  for (let i = 0; i < n; i++) x[i] = buf[i];
+});
 
 const projectRoot = path.resolve(__dirname, '..');
 const envPath = path.join(projectRoot, '.env');

@@ -81,8 +81,9 @@ export function useActivateMessage(userId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => activateMessage(id, userId),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: messageKeys.byUser(userId) });
+      qc.invalidateQueries({ queryKey: messageKeys.detail(id) });
     },
   });
 }
