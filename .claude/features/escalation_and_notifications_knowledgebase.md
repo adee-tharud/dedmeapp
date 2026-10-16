@@ -1,22 +1,21 @@
 # Escalation & Notification System — Knowledge Base
 
-> **Purpose:** Reference for building all missing escalation and notification logic.  
-> These items are listed as `❌ NOT implemented` in `ARCHITECTURE.md §Escalation & Notification System`.  
-> All 6 gaps confirmed absent from the codebase via full search (October 2026).
+> **Purpose:** Reference for all escalation, notification, welfare-check, and message delivery logic.  
+> Status: ✅ All 6 gaps implemented + Stage 3 Caregiver Welfare Check Confirmation Gate active (October 2026).
 
 ---
 
-## What Already Exists (Baseline)
+## Architecture & Implementation Status
 
-| Piece | Location | Notes |
-|---|---|---|
-| Monitored person taps check-in button | `src/app/(tabs)/index.tsx` → `recordCheckIn()` | Works |
-| Check-in saved to `check_ins` (idempotent, 1/day) | `src/features/checkin/checkin.service.ts` | Works |
-| UI countdown to next check-in due | `nextCheckInDue()` in `checkin.service.ts` | Client-side only |
-| Push token registered + saved to `push_tokens` | `src/features/notifications/notifications.service.ts` | Saves token; never sends |
-| Caregiver sees last check-in on dashboard | `src/app/(tabs)/caregiver-home.tsx` | Works |
-| `escalation_events` table | `supabase/migrations/20260929065620_init_schema.sql` | Table exists; nothing writes to it |
-| `messages` table | `supabase/migrations/20260929065620_init_schema.sql` | Table exists; CRUD works; delivery never triggered |
+| Piece | Location | Status | Notes |
+|---|---|---|---|
+| Monitored person taps check-in button | `src/app/(tabs)/index.tsx` → `recordCheckIn()` | ✅ Active | Check-in saved to `check_ins` (idempotent, 1/day) |
+| Server-side cron job (`pg_cron`) | `supabase/migrations/20261016000000_add_pg_cron_job.sql` | ✅ Active | Runs every 15 min; calls Edge Function with service-role token |
+| Missed check-in detector & state machine | `supabase/functions/check-missed-checkins/index.ts` | ✅ Active | Evaluates overdue users, checks grace periods, advances stages |
+| Stage 1 & 2 pushes to monitored person | `supabase/functions/check-missed-checkins/index.ts` | ✅ Active | Expo Push API dispatch to registered push tokens |
+| Stage 3 Caregiver Welfare Check Gate | `supabase/migrations/20261016100000_caregiver_confirmations.sql` | ✅ Active | Pushes caregivers, creates confirmation rows with 36h auto-timeout |
+| Welfare Check screen & actions | `src/app/welfare-check/[userId].tsx` | ✅ Active | Caregiver decides "They're okay" (blocks delivery) or "They need help" (delivers immediately) |
+| Escrow Decryption & Message Delivery | `check-missed-checkins` + Resend API | ✅ Active | Unseals Envelope B via `ESCROW_PRIVATE_KEY` to recover MDK & send decrypted email |
 
 ---
 
@@ -169,91 +168,44 @@ The cron Edge Function uses the **service role key** and can write to `escalatio
 
 ## ❌ Gap 4 — Caregiver Alert Push Notification (Stage 3)
 
+## ✅ Gap 4 — Caregiver Welfare Check Confirmation Gate (Stage 3)
+
 ### What it is
-When Stage 3 fires, all caregivers of the monitored person receive a push notification.
+When Stage 3 fires:
+1. Pushes all accepted caregivers with a deep-link: `peartap://welfare-check/<userId>`.
+2. Creates rows in `caregiver_confirmations` (`status: 'pending'`, `deadline_at: now + 36h`).
+3. Messages are **NOT** sent immediately. Caregivers have a 36-hour confirmation gate to reach the monitored person.
 
-### How to build (inside Stage 3 handler)
-```ts
-async function fireStage3(supabase, userId: string, profile: Profile) {
-  // 1. Get all accepted caregivers for this user
-  const { data: caregivers } = await supabase
-    .from('caregivers')
-    .select('caregiver_user_id, name')
-    .eq('user_id', userId)
-    .eq('status', 'accepted')
-    .not('caregiver_user_id', 'is', null);
+### Caregiver Decision Logic (`processStage3Pending`)
+Each subsequent cron tick checks `caregiver_confirmations` for the overdue user:
+- **"They're okay" (`person_okay`)**: Caregiver verified the person is safe.
+  - Escalation event marked `stage_3_resolved`.
+  - **No emergency messages are delivered.**
+- **"They need help" (`person_not_okay`)**: Caregiver verified the person needs urgent help.
+  - Emergency messages delivered immediately via Resend.
+  - Escalation event marked `stage_3_delivered`.
+- **36-hour timeout**: If all caregivers remain `pending` and `now >= deadline_at`:
+  - System automatically delivers emergency messages.
+  - Escalation event marked `stage_3_delivered`.
 
-  // 2. For each caregiver, get their push tokens and notify
-  for (const cg of caregivers ?? []) {
-    const tokens = await getPushTokensForUser(supabase, cg.caregiver_user_id);
-    for (const token of tokens) {
-      await sendExpoPush(
-        token,
-        '⚠️ Check-in Alert',
-        `${profile.name} has not checked in. Please check on them.`,
-      );
-    }
-  }
-
-  // 3. Log to escalation_events
-  await supabase.from('escalation_events').insert({ user_id: userId, stage: 'stage_3' });
-}
-```
-
-### RLS Note
-- `push_tokens` RLS only allows users to read/delete **their own** tokens.
-- The cron Edge Function uses the **service role key** — bypasses RLS to read any user's tokens.
-- This is intentional and the only acceptable way to dispatch caregiver alerts.
+### In-App Entry Point
+In addition to the push notification deep-link, caregivers can tap any overdue card on `CaregiverHomeScreen` (`src/app/(tabs)/caregiver-home.tsx`) to open the welfare-check screen at `/welfare-check/[userId]`.
 
 ---
 
-## ❌ Gap 5 — Message Delivery to Caregivers/Contacts (Stage 3)
+## ✅ Gap 5 — Dual-Envelope Escrow Message Decryption & Delivery (Stage 3)
 
-### Current state
-- `messages.service.ts` has full CRUD including `activateMessage()` (draft → active).
-- Once `status = 'active'`, **nothing triggers delivery**. The message just sits in the DB.
-
-### What to build
-Stage 3 of the escalation Edge Function should also deliver active messages:
-
-```ts
-async function deliverMessages(supabase, userId: string) {
-  // Fetch all active (encrypted) messages for this user
-  const { data: messages } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'active');
-
-  for (const msg of messages ?? []) {
-    // Note: body is client-side encrypted — the Edge Function receives ciphertext.
-    // Delivery sends the encrypted body. The recipient receives it as-is.
-    // (The design intention: only the device that encrypted it can decrypt — see messages/SECURITY.md)
-    // For email delivery, consider sending a link to the app to view the message instead.
-
-    await sendMessageEmail({
-      to:      msg.recipient_email,
-      name:    msg.recipient_name,
-      phone:   msg.recipient_phone,
-      // body:  msg.body  ← encrypted; handle per SECURITY.md guidance
-    });
-
-    // Mark as sent
-    await supabase
-      .from('messages')
-      .update({ status: 'sent', updated_at: new Date().toISOString() })
-      .eq('id', msg.id);
-  }
-}
-```
-
-> ⚠️ **Encryption caveat:** Message bodies are encrypted client-side (see `messages/SECURITY.md`).  
-> The Edge Function receives ciphertext. Decide whether to:
-> - Send ciphertext + instruct recipient to use the app to view it, OR
-> - Have a separate key escrow design for server-side decryption (not yet designed).
-
-### Email dispatch
-Use **Resend** (already used in `send-caregiver-invite`). Reuse the same Resend API key secret.
+### How it works
+1. Messages are encrypted using a dual-envelope scheme:
+   - **Envelope A:** Sealed to the user's primary key (client-side access).
+   - **Envelope B:** Sealed to the server's Escrow Public Key using `tweetnacl` box (`crypto_box_seal`).
+2. When delivery is triggered (caregiver confirms "need help" or 36h timeout expires):
+   - The Edge Function unseals Envelope B using `ESCROW_PRIVATE_KEY` (Supabase secret).
+   - Recovers the ephemeral Message Data Key (MDK).
+   - Decrypts the message body with `secretbox_open` into plaintext.
+   - Dispatches a beautifully formatted email via Resend containing the sender's actual words.
+3. If `ESCROW_PRIVATE_KEY` is absent or the message is an older v1 envelope:
+   - Gracefully falls back to a secure "open PearTap" notification email so delivery is never dropped.
 
 ---
 

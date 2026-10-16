@@ -9,8 +9,13 @@
  *  3. For each overdue user, determine escalation stage using escalation_events (Gap 3).
  *  4. Stage 1 – Push reminder to monitored person (Gap 2).
  *  5. Stage 2 – Second push to monitored person (Gap 2).
- *  6. Stage 3 – Push all accepted caregivers (Gap 4) + deliver active messages via Resend (Gap 5).
- *  7. Return JSON summary { processed, escalated }.
+ *  6. Stage 3 – Push all accepted caregivers (Gap 4) + create caregiver_confirmations rows.
+ *               Messages are NOT delivered immediately — caregivers have 36 h to respond.
+ *  7. processStage3Pending – On each subsequent cron tick:
+ *       a. If any caregiver responded 'person_not_okay' → deliver messages now.
+ *       b. If any caregiver responded 'person_okay' (and none said not_okay) → resolve, no delivery.
+ *       c. If all rows still 'pending' and deadline_at has passed → auto-deliver messages.
+ *  8. Return JSON summary { processed, escalated }.
  *
  * Security:
  *  - Uses SERVICE_ROLE_KEY (Supabase secret) — bypasses RLS for cross-user reads.
@@ -64,7 +69,24 @@ interface OverdueUser {
 interface EscalationEvent {
   id: string;
   user_id: string;
-  stage: 'stage_1' | 'stage_2' | 'stage_3';
+  /**
+   * stage_3          = alerts sent to caregivers; waiting for confirmation
+   * stage_3_resolved = a caregiver confirmed the person is okay; no messages sent
+   * stage_3_delivered = messages were sent (either caregiver confirmed not-okay
+   *                     or the 36-hour auto-timeout fired)
+   */
+  stage: 'stage_1' | 'stage_2' | 'stage_3' | 'stage_3_resolved' | 'stage_3_delivered';
+  created_at: string;
+}
+
+interface CaregiverConfirmation {
+  id: string;
+  monitored_user_id: string;
+  caregiver_user_id: string;
+  escalation_event_id: string;
+  status: 'pending' | 'person_okay' | 'person_not_okay';
+  responded_at: string | null;
+  deadline_at: string;
   created_at: string;
 }
 
@@ -190,16 +212,30 @@ function tryDecryptEscrow(ciphertext: string, escrowSecretKey: Uint8Array): stri
  * Lives entirely server-side — the client app only registers tokens;
  * all sending is server-initiated from this Edge Function.
  */
-async function sendExpoPush(token: string, title: string, body: string): Promise<void> {
+/**
+ * Sends a push notification via the Expo Push API.
+ *
+ * Lives entirely server-side — the client app only registers tokens;
+ * all sending is server-initiated from this Edge Function.
+ *
+ * @param data  Optional key-value data payload (delivered to app's notification handler).
+ *              Use { url: 'peartap://welfare-check/<id>' } for deep-link notifications.
+ */
+async function sendExpoPush(
+  token: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+): Promise<void> {
   try {
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: token, title, body, sound: 'default' }),
+      body: JSON.stringify({ to: token, title, body, sound: 'default', data: data ?? {} }),
     });
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      console.error('[check-missed-checkins] Expo Push API error:', response.status, data);
+      const respData = await response.json().catch(() => ({}));
+      console.error('[check-missed-checkins] Expo Push API error:', response.status, respData);
     }
   } catch (err) {
     console.error('[check-missed-checkins] sendExpoPush fetch failed:', err);
@@ -287,33 +323,35 @@ async function fireStage2(supabase: any, user: OverdueUser): Promise<void> {
 }
 
 /**
- * Gap 4 / Gap 5 / Gap 3: Stage 3 — Alert caregivers + deliver messages.
- * Fires after grace_period_hours has elapsed since Stage 2.
- * This is the terminal escalation stage.
+ * Stage 3 — Alert caregivers + open welfare-check confirmation gate.
  *
- * Security note on push_tokens: RLS on push_tokens only allows authenticated
- * users to read their own tokens. The service-role client bypasses RLS, enabling
- * the Edge Function to read caregivers' push tokens for cross-user dispatch.
- * This is intentional and the only acceptable pattern (knowledge base Gotcha #3).
+ * This stage NO LONGER delivers messages immediately. Instead it:
+ *   1. Pushes a welfare-check notification to every accepted caregiver
+ *      with a deep link (data.url = 'peartap://welfare-check/<user_id>').
+ *   2. Inserts one caregiver_confirmations row per caregiver
+ *      (status = 'pending', deadline_at = now + 36 h).
+ *   3. Inserts the escalation_events 'stage_3' row (the completion marker).
  *
- * Note on escalation_events INSERT ordering: we insert AFTER delivery attempts
- * so that a crash mid-delivery causes the next cron run to retry Stage 3 rather
- * than skip it (the insert acts as the completion marker).
+ * The actual message delivery is handled on the NEXT cron tick(s) by
+ * processStage3Pending(), which reads the confirmation rows and decides:
+ *   - any 'person_not_okay' → deliver now
+ *   - any 'person_okay' (none not_okay) → resolve, no delivery
+ *   - all pending + deadline passed → auto-deliver
+ *
+ * Security note on push_tokens: service-role key bypasses RLS — required
+ * for reading caregivers' tokens (knowledge base Gotcha #3).
  */
 // deno-lint-ignore no-explicit-any
 async function fireStage3(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   user: OverdueUser,
-  resendApiKey: string,
-  fromEmail: string,
-  escrowSecretKey: Uint8Array | null,
 ): Promise<void> {
-  console.log(`[check-missed-checkins] Firing Stage 3 for user ${user.user_id}`);
+  console.log(`[check-missed-checkins] Firing Stage 3 (welfare-check gate) for user ${user.user_id}`);
 
   const displayName = user.name?.trim() || 'Someone in your circle';
 
-  // Gap 4: Fetch all accepted caregivers and push-notify them
+  // ── 1. Fetch all accepted caregivers ──────────────────────────────────────
   const { data: caregivers, error: cgError } = await supabase
     .from('caregivers')
     .select('caregiver_user_id, name')
@@ -328,28 +366,190 @@ async function fireStage3(
     );
   }
 
+  // ── 2. Insert stage_3 escalation_events row FIRST so we get its ID ────────
+  const { data: evtRow, error: evtError } = await supabase
+    .from('escalation_events')
+    .insert({ user_id: user.user_id, stage: 'stage_3' })
+    .select('id')
+    .single();
+
+  if (evtError || !evtRow) {
+    console.error(
+      `[check-missed-checkins] Failed to insert stage_3 event for ${user.user_id}:`,
+      evtError?.message,
+    );
+    // Still attempt push notifications even if DB write failed
+  }
+
+  const escalationEventId: string | null = evtRow?.id ?? null;
+  const deadlineAt = new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString();
+
+  // ── 3. Push each caregiver + insert confirmation row ─────────────────────
   for (const cg of caregivers ?? []) {
+    // Insert confirmation row (service-role bypasses RLS).
+    // The UNIQUE constraint on (monitored_user_id, caregiver_user_id, escalation_event_id)
+    // silently rejects duplicate inserts, making this safe to retry on cron re-runs.
+    if (escalationEventId) {
+      const { error: confirmError } = await supabase
+        .from('caregiver_confirmations')
+        .insert({
+          monitored_user_id:   user.user_id,
+          caregiver_user_id:   cg.caregiver_user_id,
+          escalation_event_id: escalationEventId,
+          status:              'pending',
+          deadline_at:         deadlineAt,
+        });
+
+      if (confirmError) {
+        // code 23505 = unique_violation; expected on cron retry — safe to ignore
+        if (confirmError.code !== '23505') {
+          console.warn(
+            `[check-missed-checkins] Could not insert confirmation row for caregiver ` +
+            `${cg.caregiver_user_id}:`,
+            confirmError.message,
+          );
+        }
+      }
+    }
+
+    // Push notification with deep-link data payload
     const caregiverTokens = await getPushTokensForUser(supabase, cg.caregiver_user_id);
     for (const token of caregiverTokens) {
       await sendExpoPush(
         token,
-        '⚠️ Check-in Alert',
-        `${displayName} has not checked in. Please check on them.`,
+        '⚠️ Welfare Check Required',
+        `${displayName} has not checked in. Please check on them and confirm their status.`,
+        // data payload — app reads this to open the welfare-check screen
+        { url: `peartap://welfare-check/${user.user_id}` },
       );
     }
   }
 
-  // Gap 5: Deliver active messages via Resend (with escrow decryption if key is available)
-  await deliverMessages(supabase, user, resendApiKey, fromEmail, escrowSecretKey);
+  const cgCount = (caregivers ?? []).length;
+  if (cgCount === 0) {
+    // No caregivers at all — deliver messages immediately, no one to confirm
+    console.warn(
+      `[check-missed-checkins] User ${user.user_id} has no accepted caregivers at Stage 3 — ` +
+      'messages will be treated as auto-delivered on next tick (no confirmation rows inserted).',
+    );
+  }
 
-  // Gap 3: Append-only audit log — insert AFTER delivery so a crash pre-insert
-  // causes a safe retry on the next cron tick
-  await supabase.from('escalation_events').insert({
-    user_id: user.user_id,
-    stage: 'stage_3',
-  });
+  console.log(
+    `[check-missed-checkins] Stage 3 fired for user ${user.user_id}. ` +
+    `Caregivers notified: ${cgCount}. Deadline: ${deadlineAt}.`,
+  );
+}
 
-  console.log(`[check-missed-checkins] Stage 3 fired + logged for user ${user.user_id}`);
+/**
+ * processStage3Pending — called each cron tick for users whose latest
+ * escalation_events row is 'stage_3' (confirmation gate open).
+ *
+ * Decision logic (checked in priority order):
+ *   1. Any 'person_not_okay' response? → deliver messages + insert stage_3_delivered
+ *   2. Any 'person_okay' + none 'person_not_okay'? → resolve + insert stage_3_resolved
+ *   3. All pending + now >= deadline_at? → auto-deliver + insert stage_3_delivered
+ *   4. Otherwise → still waiting; do nothing this tick.
+ *
+ * Returns true if a terminal action was taken (delivery or resolution).
+ */
+// deno-lint-ignore no-explicit-any
+async function processStage3Pending(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  user: OverdueUser,
+  stage3Event: EscalationEvent,
+  resendApiKey: string,
+  fromEmail: string,
+  escrowSecretKey: Uint8Array | null,
+): Promise<boolean> {
+  // Fetch all confirmation rows for this stage_3 event
+  const { data: confirmations, error: confError } = await supabase
+    .from('caregiver_confirmations')
+    .select('id, status, deadline_at, caregiver_user_id')
+    .eq('monitored_user_id', user.user_id)
+    .eq('escalation_event_id', stage3Event.id);
+
+  if (confError) {
+    console.error(
+      `[check-missed-checkins] Failed to fetch confirmations for ${user.user_id}:`,
+      confError.message,
+    );
+    return false;
+  }
+
+  const rows = (confirmations ?? []) as CaregiverConfirmation[];
+  const now  = new Date();
+
+  // Edge case: no caregiver_confirmations rows (no accepted caregivers at Stage 3 time)
+  // → auto-deliver now (no one to confirm)
+  if (rows.length === 0) {
+    console.log(
+      `[check-missed-checkins] No confirmation rows for ${user.user_id} — auto-delivering (no caregivers).`,
+    );
+    await deliverMessages(supabase, user, resendApiKey, fromEmail, escrowSecretKey);
+    await supabase.from('escalation_events').insert({
+      user_id: user.user_id,
+      stage: 'stage_3_delivered',
+    });
+    return true;
+  }
+
+  const hasNotOkay = rows.some(r => r.status === 'person_not_okay');
+  const hasOkay    = rows.some(r => r.status === 'person_okay');
+  const allPending  = rows.every(r => r.status === 'pending');
+  // Deadline: use the minimum deadline_at across all rows
+  const deadline   = new Date(Math.min(...rows.map(r => new Date(r.deadline_at).getTime())));
+
+  // ── Priority 1: Any caregiver said NOT okay → deliver immediately ──────────
+  if (hasNotOkay) {
+    const responder = rows.find(r => r.status === 'person_not_okay')!;
+    console.log(
+      `[check-missed-checkins] Caregiver ${responder.caregiver_user_id} confirmed NOT okay ` +
+      `for ${user.user_id} — delivering messages now.`,
+    );
+    await deliverMessages(supabase, user, resendApiKey, fromEmail, escrowSecretKey);
+    await supabase.from('escalation_events').insert({
+      user_id: user.user_id,
+      stage: 'stage_3_delivered',
+    });
+    return true;
+  }
+
+  // ── Priority 2: At least one 'okay' and none 'not_okay' → resolve ─────────
+  if (hasOkay && !hasNotOkay) {
+    const responder = rows.find(r => r.status === 'person_okay')!;
+    console.log(
+      `[check-missed-checkins] Caregiver ${responder.caregiver_user_id} confirmed OKAY ` +
+      `for ${user.user_id} — escalation resolved, no messages sent.`,
+    );
+    await supabase.from('escalation_events').insert({
+      user_id: user.user_id,
+      stage: 'stage_3_resolved',
+    });
+    return true;
+  }
+
+  // ── Priority 3: All still pending + deadline passed → auto-deliver ─────────
+  if (allPending && now >= deadline) {
+    console.log(
+      `[check-missed-checkins] 36-hour caregiver timeout reached for ${user.user_id} ` +
+      '— auto-delivering messages.',
+    );
+    await deliverMessages(supabase, user, resendApiKey, fromEmail, escrowSecretKey);
+    await supabase.from('escalation_events').insert({
+      user_id: user.user_id,
+      stage: 'stage_3_delivered',
+    });
+    return true;
+  }
+
+  // Still waiting — log remaining time
+  const hoursLeft = Math.max(0, (deadline.getTime() - now.getTime()) / (1000 * 60 * 60));
+  console.log(
+    `[check-missed-checkins] Stage 3 pending for ${user.user_id}. ` +
+    `Awaiting caregiver response. Auto-deliver in ${hoursLeft.toFixed(1)}h.`,
+  );
+  return false;
 }
 
 // ── Message delivery (Gap 5) ──────────────────────────────────────────────────
@@ -585,17 +785,18 @@ If you are concerned about their wellbeing, please try to reach them directly or
  * Determines the next escalation stage for a given overdue user and fires it.
  *
  * State machine rules:
- *   No event         → fire Stage 1
+ *   No event              → fire Stage 1
  *   stage_1 + elapsed >= grace_period_hours → fire Stage 2
- *   stage_2 + elapsed >= grace_period_hours → fire Stage 3
- *   stage_3          → terminal; no further action
+ *   stage_2 + elapsed >= grace_period_hours → fire Stage 3 (alerts + open confirmation gate)
+ *   stage_3               → check caregiver_confirmations via processStage3Pending()
+ *   stage_3_resolved      → terminal (person okay; no further action)
+ *   stage_3_delivered     → terminal (messages sent; no further action)
  *
  * grace_period_hours null-check (knowledge base Gotcha #8):
  *   If the user hasn't completed onboarding, grace_period_hours may be null.
- *   We default to 24 hours rather than proceeding immediately to avoid
- *   false-positive escalations.
+ *   We default to 24 hours rather than proceeding immediately.
  *
- * Returns true if a stage was fired, false if still in grace period or terminal.
+ * Returns true if an action was taken this tick.
  */
 // deno-lint-ignore no-explicit-any
 async function processOverdueUser(
@@ -645,14 +846,27 @@ async function processOverdueUser(
   if (latestEvent.stage === 'stage_2') {
     const elapsed = hoursDiff(latestEvent.created_at, now);
     if (elapsed >= gracePeriod) {
-      await fireStage3(supabase, user, resendApiKey, fromEmail, escrowSecretKey);
+      // Stage 3: send alerts + open confirmation gate (no message delivery yet)
+      await fireStage3(supabase, user);
       return true;
     }
     return false;
   }
 
-  // stage_3 is terminal (knowledge base §Gap 6 — no further escalation)
+  // stage_3 = confirmation gate open — delegate to processStage3Pending each tick
   if (latestEvent.stage === 'stage_3') {
+    return await processStage3Pending(
+      supabase,
+      user,
+      latestEvent,
+      resendApiKey,
+      fromEmail,
+      escrowSecretKey,
+    );
+  }
+
+  // Terminal stages — nothing more to do
+  if (latestEvent.stage === 'stage_3_resolved' || latestEvent.stage === 'stage_3_delivered') {
     return false;
   }
 
