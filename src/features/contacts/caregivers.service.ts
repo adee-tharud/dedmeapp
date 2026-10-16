@@ -40,6 +40,8 @@ export interface WatchedPersonRow {
   monitoredPersonName: string | null;
   /** Check-in frequency in days */
   frequencyDays?: number;
+  /** True only if a Stage 3 welfare-check confirmation row is open for this caregiver */
+  hasPendingWelfareCheck?: boolean;
 }
 
 // ── Monitored-person side ─────────────────────────────────────────────────────
@@ -227,10 +229,20 @@ export async function getCaregiverWatch(userId: string): Promise<WatchedPersonRo
     });
   }
 
+  // 4. For each monitored person, check if there is an active pending welfare check
+  const { data: confirmations } = await supabase
+    .from('caregiver_confirmations')
+    .select('monitored_user_id')
+    .eq('caregiver_user_id', userId)
+    .eq('status', 'pending');
+
+  const pendingWelfareSet = new Set((confirmations ?? []).map(c => c.monitored_user_id));
+
   return (rows as CaregiverRow[]).map(caregiver => ({
     caregiver,
     lastCheckInAt: latestCheckIn.get(caregiver.user_id) ?? null,
     monitoredPersonName: profileMap.get(caregiver.user_id)?.name ?? null,
     frequencyDays: profileMap.get(caregiver.user_id)?.frequencyDays ?? 1,
+    hasPendingWelfareCheck: pendingWelfareSet.has(caregiver.user_id),
   }));
 }

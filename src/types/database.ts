@@ -1,7 +1,7 @@
 /**
  * Database types — manually maintained in sync with Supabase migrations.
  *
- * Last updated: migration 20261009000000_caregiver_roles_and_push_tokens
+ * Last updated: migration 20261016100000_caregiver_confirmations
  *
  * Sync command: `npx supabase gen types typescript --project-id <id> > src/types/database.ts`
  */
@@ -183,7 +183,37 @@ export interface Database {
         Update: Record<string, never>;
         Relationships: [];
       };
+      caregiver_confirmations: {
+        Row: {
+          id: string;
+          monitored_user_id: string;
+          caregiver_user_id: string;
+          escalation_event_id: string | null;
+          /** 'pending' | 'person_okay' | 'person_not_okay' */
+          status: 'pending' | 'person_okay' | 'person_not_okay';
+          responded_at: string | null;
+          /** ISO timestamp after which messages auto-deliver if still pending */
+          deadline_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          monitored_user_id: string;
+          caregiver_user_id: string;
+          escalation_event_id?: string | null;
+          status?: 'pending' | 'person_okay' | 'person_not_okay';
+          responded_at?: string | null;
+          deadline_at: string;
+          created_at?: string;
+        };
+        Update: {
+          status?: 'pending' | 'person_okay' | 'person_not_okay';
+          responded_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
+
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;

@@ -24,6 +24,7 @@ import {
   Platform,
   Animated,
   Pressable,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,7 @@ import { colors, fontSizes, fontWeights, radii, spacing, shadows } from '@/theme
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { avatarInitial, computeWatchStatus, timeUntilDue } from '@/utils';
+import { router } from 'expo-router';
 import { useAuth, setLastUserRole } from '@/features/auth';
 import { useCaregiverWatch, useAcceptCaregiverInvite } from '@/features/contacts';
 
@@ -40,11 +42,13 @@ type CheckInStatus = 'ok' | 'due' | 'overdue';
 
 interface WatchedPerson {
   id: string;
+  monitoredUserId: string;
   name: string;
   relationship: string;
   status: CheckInStatus;
   lastCheckIn: string | null;
   nextDue: string | null;
+  hasPendingWelfareCheck: boolean;
 }
 
 
@@ -216,11 +220,27 @@ function AddInviteSheet({
 function WatchedCard({ person, index }: { person: WatchedPerson; index: number }) {
   const sc = STATUS_CONFIG[person.status];
   const av = avatarColors(index);
+  const isOverdue = person.status === 'overdue';
+  const hasWelfareCheck = person.hasPendingWelfareCheck;
 
   return (
     <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.85}
+      style={[styles.card, hasWelfareCheck && styles.overdueCardBorder]}
+      activeOpacity={hasWelfareCheck ? 0.85 : 0.95}
+      onPress={() => {
+        if (hasWelfareCheck) {
+          router.push({
+            pathname: '/welfare-check/[userId]',
+            params: { userId: person.monitoredUserId },
+          });
+        } else if (isOverdue) {
+          Alert.alert(
+            'Check-in Overdue',
+            `${person.name} has missed their regular check-in. The system has sent them a direct reminder. If they do not check in after their grace period, you will receive an alert to perform a welfare check.`,
+            [{ text: 'OK' }],
+          );
+        }
+      }}
       accessibilityRole="button"
       accessibilityLabel={`${person.name}, ${sc.label}`}
     >
@@ -243,14 +263,26 @@ function WatchedCard({ person, index }: { person: WatchedPerson; index: number }
         {person.lastCheckIn && (
           <Text style={styles.lastCheckIn}>Last check-in: {person.lastCheckIn}</Text>
         )}
-        {person.status !== 'ok' && person.nextDue && (
+        {hasWelfareCheck ? (
+          <Text style={[styles.nextDue, { color: colors.surface.dangerText, fontWeight: fontWeights.bold }]}>
+            Welfare check required • Tap to respond
+          </Text>
+        ) : isOverdue ? (
+          <Text style={[styles.nextDue, { color: colors.surface.warningDark }]}>
+            Missed check-in — reminder sent
+          </Text>
+        ) : person.status !== 'ok' && person.nextDue ? (
           <Text style={[styles.nextDue, { color: sc.text }]}>
             Due {person.nextDue}
           </Text>
-        )}
+        ) : null}
       </View>
 
-      <Ionicons name="chevron-forward" size={18} color={colors.grey[300]} />
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={hasWelfareCheck ? colors.surface.dangerText : colors.grey[300]}
+      />
     </TouchableOpacity>
   );
 }
@@ -297,6 +329,7 @@ export default function CaregiverHomeScreen() {
 
     return {
       id: row.caregiver.id,
+      monitoredUserId: row.caregiver.user_id,
       name: displayName,
       relationship: row.caregiver.relationship ?? 'Monitored',
       status,
@@ -304,6 +337,7 @@ export default function CaregiverHomeScreen() {
         ? new Date(lastAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
         : null,
       nextDue,
+      hasPendingWelfareCheck: row.hasPendingWelfareCheck ?? false,
     };
   });
 
@@ -567,6 +601,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: spacing[4],
     backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing[5],
     ...shadows.card,
+  },
+  overdueCardBorder: {
+    borderWidth: 1.5,
+    borderColor: colors.surface.dangerBorder,
   },
   avatar: {
     width: 54, height: 54, borderRadius: radii.lg,
